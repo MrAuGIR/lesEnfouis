@@ -10,6 +10,8 @@
 > 🖼️ **Itérations du designer :** dossier [`concept-art/`](../concept-art/) — 1re planche
 > ([couche Industrielle](../concept-art/planche-style-couche-industrielle.png)) +
 > [retour structuré](../concept-art/retour-planche-01-industriel.md).
+>
+> 🧑 **Briefs de concept (par élément) :** [Le Héros](../concept-art/brief-concept-heros.md).
 
 ## 1. Le projet en bref
 

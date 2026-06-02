@@ -1,6 +1,8 @@
 # 03 — Personnages & Ennemis
 
 > Qui joue-t-on, qui peuple le monde, et à quoi s'oppose-t-on ?
+>
+> 🧑 **Brief de concept pour le designer : [brief-concept-heros.md](../concept-art/brief-concept-heros.md)** (design + lisibilité + système de modules du héros).
 
 ---
 
