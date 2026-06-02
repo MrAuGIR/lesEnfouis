@@ -11,7 +11,8 @@
 > ([couche Industrielle](../concept-art/planche-style-couche-industrielle.png)) +
 > [retour structuré](../concept-art/retour-planche-01-industriel.md).
 >
-> 🧑 **Briefs de concept (par élément) :** [Le Héros](../concept-art/brief-concept-heros.md).
+> 🧑 **Briefs de concept (par élément) :** [Le Héros](../concept-art/brief-concept-heros.md) ·
+> [L'ennemi Robot](../concept-art/brief-concept-ennemi-robot.md).
 
 ## 1. Le projet en bref
 

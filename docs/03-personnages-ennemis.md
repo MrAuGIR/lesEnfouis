@@ -2,7 +2,7 @@
 
 > Qui joue-t-on, qui peuple le monde, et à quoi s'oppose-t-on ?
 >
-> 🧑 **Brief de concept pour le designer : [brief-concept-heros.md](../concept-art/brief-concept-heros.md)** (design + lisibilité + système de modules du héros).
+> 🧑 **Briefs de concept pour le designer :** [Le Héros](../concept-art/brief-concept-heros.md) (modules de l'avatar) · [L'ennemi Robot](../concept-art/brief-concept-ennemi-robot.md) (langage visuel + deux registres lore).
 
 ---
 
