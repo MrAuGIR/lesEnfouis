@@ -16,6 +16,7 @@
 > 📄 **Synthèse d'une page (pitch & vue d'ensemble) : [SYNTHESE.md](SYNTHESE.md)**
 > · 🛠️ **Plan de prototype (vertical slice) : [PROTOTYPE.md](PROTOTYPE.md)**
 > · 🎨 **Brief de direction artistique : [BRIEF-DIRECTION-ARTISTIQUE.md](BRIEF-DIRECTION-ARTISTIQUE.md)**
+> · 🖼️ **Concept art (itérations designer) : [`concept-art/`](../concept-art/)** — 1re planche ([couche Industrielle](../concept-art/planche-style-couche-industrielle.png)) + [retour](../concept-art/retour-planche-01-industriel.md)
 
 ## Pitch (état actuel)
 

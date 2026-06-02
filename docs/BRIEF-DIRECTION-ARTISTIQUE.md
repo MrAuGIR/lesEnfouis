@@ -6,6 +6,10 @@
 > **pixel art 2D**.
 >
 > Détail gameplay complet dans le GDD (`docs/`), notamment [04-direction-artistique.md](04-direction-artistique.md).
+>
+> 🖼️ **Itérations du designer :** dossier [`concept-art/`](../concept-art/) — 1re planche
+> ([couche Industrielle](../concept-art/planche-style-couche-industrielle.png)) +
+> [retour structuré](../concept-art/retour-planche-01-industriel.md).
 
 ## 1. Le projet en bref
 

@@ -4,6 +4,10 @@
 > réaliste à produire pour un indie.
 >
 > 🎨 **Brief prêt à confier à un designer : [BRIEF-DIRECTION-ARTISTIQUE.md](BRIEF-DIRECTION-ARTISTIQUE.md).**
+>
+> 🖼️ **Concept art (itérations designer) :** dossier [`concept-art/`](../concept-art/) — 1re planche
+> ([couche Industrielle](../concept-art/planche-style-couche-industrielle.png)) +
+> [retour structuré](../concept-art/retour-planche-01-industriel.md).
 
 ---
 
