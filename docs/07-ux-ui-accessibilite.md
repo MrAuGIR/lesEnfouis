@@ -1,6 +1,8 @@
 # 07 — UX / UI & Accessibilité
 
 > Comment l'information est présentée et comment on pilote le jeu. *(Section à traiter.)*
+>
+> 🖥️ **Brief de concept pour le designer : [brief-concept-hud.md](../concept-art/brief-concept-hud.md)** (langage du HUD d'exploration + lisibilité dans le noir).
 
 ---
 

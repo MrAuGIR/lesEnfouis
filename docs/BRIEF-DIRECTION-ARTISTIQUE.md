@@ -14,7 +14,8 @@
 > ([retour](../concept-art/retour-concept-heros.md)).
 >
 > 🧑 **Briefs de concept (par élément) :** [Le Héros](../concept-art/brief-concept-heros.md) ·
-> [L'ennemi Robot](../concept-art/brief-concept-ennemi-robot.md).
+> [L'ennemi Robot](../concept-art/brief-concept-ennemi-robot.md) ·
+> [Le HUD](../concept-art/brief-concept-hud.md).
 
 ## 1. Le projet en bref
 
