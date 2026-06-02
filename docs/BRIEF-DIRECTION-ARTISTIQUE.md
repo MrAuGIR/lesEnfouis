@@ -7,9 +7,11 @@
 >
 > Détail gameplay complet dans le GDD (`docs/`), notamment [04-direction-artistique.md](04-direction-artistique.md).
 >
-> 🖼️ **Itérations du designer :** dossier [`concept-art/`](../concept-art/) — 1re planche
-> ([couche Industrielle](../concept-art/planche-style-couche-industrielle.png)) +
-> [retour structuré](../concept-art/retour-planche-01-industriel.md).
+> 🖼️ **Itérations du designer :** dossier [`concept-art/`](../concept-art/) —
+> [couche Industrielle](../concept-art/planche-style-couche-industrielle.png)
+> ([retour](../concept-art/retour-planche-01-industriel.md)) ·
+> [héros](../concept-art/concept-hero.png)
+> ([retour](../concept-art/retour-concept-heros.md)).
 >
 > 🧑 **Briefs de concept (par élément) :** [Le Héros](../concept-art/brief-concept-heros.md) ·
 > [L'ennemi Robot](../concept-art/brief-concept-ennemi-robot.md).
