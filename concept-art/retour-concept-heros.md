@@ -39,8 +39,8 @@ même la **question d'échelle tranchée**. Il ne reste qu'**une décision de de
 
 ## 🟡 À confirmer / ajuster (mineur)
 
-- **Verrouiller l'échelle** : confirmer 28 px **ou** 32 px comme définitif (impacte tous les
-  futurs sprites et tilesets — à figer maintenant pour éviter de tout refaire).
+- ~~**Verrouiller l'échelle**~~ ✅ **Figé : grille de tuiles 16 px, héros ~2 tuiles (~30-32 px).**
+  Verrouillé dans la DA ([04](../docs/04-direction-artistique.md)) — base de tous les sprites/tilesets.
 - **Cohérence lumière ↔ couvre-chef** : si on retient A (frontale), s'assurer que **tous** les
   couvre-chefs (capuche, bonnet…) gèrent la lampe, ou prévoir un fallback.
 - **Lisibilité du dos** : vérifier que la silhouette de dos reste aussi reconnaissable que la

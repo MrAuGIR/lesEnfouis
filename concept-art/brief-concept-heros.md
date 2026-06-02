@@ -1,8 +1,8 @@
 # Brief de concept — Le Héros (avatar joueur)
 
 > ✅ **Réponse du designer reçue :** planche [`concept-hero.png`](concept-hero.png) +
-> [retour structuré](retour-concept-heros.md). **Décision : lampe frontale (casque)** retenue
-> comme source de lumière. Reste à verrouiller l'échelle (28 vs 32 px).
+> [retour structuré](retour-concept-heros.md). **Décisions figées :** lampe frontale (casque)
+> comme source de lumière · **héros ~2 tuiles (~30-32 px) en grille 16 px**.
 >
 > **À l'attention du / de la designer.** Brief ciblé pour concevoir le **personnage jouable**.
 > Étape **concept** : on cherche le **bon design + la lisibilité**, pas les sprite sheets finaux.

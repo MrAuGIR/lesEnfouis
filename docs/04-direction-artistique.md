@@ -15,8 +15,13 @@
 **R.** ✅ **Pixel art classique**, coloré, en 2D vue en coupe. Choix naturel pour un monde
 de **blocs/tuiles creusables** (cf. Terraria/Minecraft) : lisible, nostalgique et
 économique à produire.
-> 💡 *À détailler* : résolution/taille des tuiles, densité de détail, taille des sprites.
-- [ ] Validé
+> 🔒 **Échelle figée — tuiles 16 px.** Le **héros mesure ~2 tuiles (~30-32 px)**. Ce réglage
+> (éprouvé par Terraria) donne un **creusage fin et précis** (risque n°1 du projet), garde les
+> **4 modules de l'avatar lisibles**, et reste économique en assets. La **tuile de 32 px est
+> écartée** : elle réduirait le héros à ~1 tuile et casserait la lisibilité de la
+> personnalisation. *Résolution interne indépendante* : dessiner en 16 px et afficher en ×3/×4
+> (ex. rendu interne ~480×270 → 1080p, soit ~30×17 tuiles à l'écran).
+- [x] Validé
 
 ### Q. Comment traduire le ton (sombre + humour Fallout + mystère Metro) en image ?
 **R.** 🟡 Proposition : palette **colorée mais un peu désaturée/contrastée**, **éclairage à

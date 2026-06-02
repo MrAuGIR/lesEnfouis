@@ -35,7 +35,7 @@ Faire ressentir la **petite lumière qui s'enfonce dans le noir** : un sous-sol 
 - **Pixel art coloré, classique** (contours lisibles, formes claires). *Pas* de vectoriel.
 - **Niveau de détail :** personnages et ennemis **très lisibles** ; décors plus stylisés.
 - **Animation :** pixel art **image par image**, volontairement **sobre** (peu de frames par action) — cohérent avec une équipe indie.
-- **Résolution / taille de tuile :** *à caler ensemble* (suggestion de départ : tuiles 16 px ou 32 px). Proposer 1-2 essais.
+- **Résolution / taille de tuile :** 🔒 **figé — tuiles 16 px**, héros **~2 tuiles (~30-32 px)** (creusage fin + modules de l'avatar lisibles). Résolution interne en ×3/×4 (ex. ~480×270 → 1080p).
 - **Monde en tuiles destructibles :** les tilesets doivent **se raccorder proprement** et distinguer d'un coup d'œil **bloc creusable vs non-creusable**.
 
 ## 4. Palette & identité par couche
