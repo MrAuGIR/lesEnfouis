@@ -21,9 +21,10 @@ godot --editor --path prototype
 
 ## Contrôles
 
-- **A / D** ou **← / →** : se déplacer · **Espace / W / ↑** : sauter
+- **ZQSD** (ou WASD) ou **← / →** : se déplacer · **Espace / Z / ↑** : sauter
 - **Clic gauche** : creuser la tuile visée (dans le rayon autour du héros)
 - **R** : recharger la lampe (lithium) · **T** : poser une torche (bois)
+- **F** : poser une **échelle** (bois) dans la colonne, des pieds vers le haut — puis **Z/S** (ou ↑/↓) pour **grimper**
 - **E** : déposer à la base (si proche) / récupérer une cache (si proche)
 - **Q** : retirer de la base vers le sac (si proche — priorité au carburant)
 - **1 / 2 / 3** (près de la base) : construire **Production** / **Atelier** / **améliorer l'outil**
@@ -50,6 +51,11 @@ godot --editor --path prototype
   **Production** (`1`) où un **PNJ génère du lithium en passif** (même quand on explore) et un
   **Atelier** (`2`) ; **améliorer l'outil de creusage** (`3`, paliers **Pierre → Fer → Acier** =
   creusage plus rapide). La boucle *expédition → dépôt → développement → repartir* est bouclée. ✅
+- **Jalon 4 — bouclage & mini-objectif** : déplacement **ZQSD** (touches physiques) ; une session
+  jouable assemble tout — descendre, gérer lumière/carburant, franchir une **barrière de roche
+  dense** (nécessite l'**outil Fer** → retour base + atelier + amélioration), récupérer
+  l'**Artefact** au fond et le **rapporter à la base** pour **gagner** (objectif suivi dans le HUD).
+  Mourir en le portant le largue dans la **cache**. ✅
 - Tout est piloté par `scripts/Game.gd` ; les **valeurs réglables** (vitesse de creusage,
   gravité, saut, portée, **rayon/portée de lumière**…) sont en haut du script.
 

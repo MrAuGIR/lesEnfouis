@@ -19,6 +19,8 @@ const STRUCT_MAX_H := 6
 const MOVE_SPEED := 98.0    # px/s
 const GRAVITY := 900.0
 const JUMP_SPEED := 300.0
+const CLIMB_SPEED := 85.0        # vitesse de montée/descente sur une échelle
+const LADDER_MAX := 10           # longueur max d'une pose d'échelle (tuiles, 1 bois/tuile)
 
 const DIG_TIME := 0.28      # s pour creuser 1 bloc de terre (le nerf du game feel)
 const ROCK_MULT := 2.5      # la roche est plus lente
@@ -61,6 +63,12 @@ const DIG_TIERS := [1.0, 0.65, 0.45]              # mult. de temps (Pierre→Fer
 const TIER_NAMES := ["Pierre", "Fer", "Acier"]
 const UPGRADE_COST := [{}, {"rock": 15, "lithium": 8}, {"rock": 25, "lithium": 16}]
 
+# --- Objectif (Jalon 4) -----------------------------------------------------
+const HARD_MULT := 4.5            # creusage de la roche dense (très lent)
+const BAND_TOP := AIR_ROWS + 50   # profondeur de la barrière de roche dense
+const BAND_H := 4                 # épaisseur de la barrière (tuiles)
+const ARTEFACT_Y := AIR_ROWS + 60 # profondeur de l'artefact (sous la barrière)
+
 # Types de tuile
 const EMPTY := 0
 const DIRT := 1
@@ -68,6 +76,9 @@ const ROCK := 2
 const WOOD := 3    # étais de bois (dans la terre) → torches + construction/craft
 const LITHIUM := 4 # minerai de lithium (dans la roche) → recharge la lampe frontale
 const WALL := 5    # béton d'un bunker abandonné (creusable, sans ressource : gravats)
+const HARDROCK := 6 # roche dense (barrière) : nécessite l'outil Fer (niveau >= 1)
+const ARTEFACT := 7 # objectif à rapporter à la base
+const LADDER := 8   # échelle (construite en bois) : on grimpe dessus
 
 # --- État -------------------------------------------------------------------
 var grid := PackedByteArray()
@@ -107,6 +118,10 @@ var has_workshop := false         # atelier construit (débloque l'amélioration
 var prod_timer := 0.0
 var dig_level := 0                # palier d'outil : 0 Pierre, 1 Fer, 2 Acier
 var dig_time := DIG_TIME          # temps de creusage courant (selon le palier)
+
+var has_artefact := false         # objectif transporté
+var cache_artefact := false       # l'artefact est tombé dans la cache (mort)
+var won := false                  # objectif accompli
 
 var flashes := []   # éclats de creusage : {cell:Vector2i, t:float}
 
@@ -165,6 +180,18 @@ func _generate_world() -> void:
 						t = LITHIUM
 			grid[y * GRID_W + x] = t
 	_place_structures()
+	_place_objective()
+
+func _place_objective() -> void:
+	# Barrière de roche dense (gate : outil Fer requis) + artefact dessous.
+	for x in GRID_W:
+		for y in range(BAND_TOP, BAND_TOP + BAND_H):
+			grid[y * GRID_W + x] = HARDROCK
+	var cx := int(GRID_W * 0.5)
+	for yy in range(ARTEFACT_Y - 1, ARTEFACT_Y + 2):
+		for xx in range(cx - 2, cx + 3):
+			grid[yy * GRID_W + xx] = EMPTY
+	grid[ARTEFACT_Y * GRID_W + cx] = ARTEFACT
 
 func _place_structures() -> void:
 	# Bunkers abandonnés : petites salles en béton contenant du bois (seule source).
@@ -208,7 +235,7 @@ func _make_hud() -> void:
 	hud.add_theme_color_override("font_color", Color(0.85, 0.9, 0.8))
 	layer.add_child(hud)
 	msg_label = Label.new()
-	msg_label.position = Vector2(12, 118)
+	msg_label.position = Vector2(12, 142)
 	msg_label.add_theme_color_override("font_color", Color(1.0, 0.92, 0.45))
 	layer.add_child(msg_label)
 	_update_hud()
@@ -225,10 +252,15 @@ func _update_hud() -> void:
 	if cache_active:
 		bagline += "     >> CACHE a recuperer <<"
 	var base_line := "Base: Production[%s]  Atelier[%s]  Outil: %s" % ["ON" if has_prod else "-", "ON" if has_workshop else "-", TIER_NAMES[dig_level]]
-	var hint := "[A/D] [Espace] [Clic] creuser  [R] lampe  [T] torche  [E] deposer/recuperer  [Q] retirer  [K] mort"
+	var obj := "Objectif: descendre chercher l'Artefact (roche dense profonde = outil Fer)"
+	if won:
+		obj = "*** GAGNE ! Artefact rapporte a la base ***"
+	elif has_artefact:
+		obj = ">> Artefact EN MAIN -- rentre le deposer a la base ! <<"
+	var hint := "[ZQSD/Fleches] bouger/grimper  [Espace] saut  [Clic] creuser  [F] echelle  [R] lampe  [T] torche  [E] deposer  [Q] retirer  [K] mort"
 	if _near_base():
 		hint = "BASE >  [1] Production (12 roche/8 bois)   [2] Atelier (15 roche/6 bois)   [3] Ameliorer outil   [E] deposer  [Q] retirer"
-	hud.text = "PV: %d/%d    %s\nPortes - Li:%d  Bois:%d  Terre:%d  Roche:%d\nBase   - Li:%d  Bois:%d  Terre:%d  Roche:%d\nLampe: %d%%   Torches: %d   |   %s\n%s" % [int(hp), int(MAX_HP), bagline, res_lithium, res_wood, res_dirt, res_rock, store_lithium, store_wood, store_dirt, store_rock, int(lamp_fuel / LAMP_AUTONOMY * 100.0), torches.size(), base_line, hint]
+	hud.text = "%s\nPV: %d/%d    %s\nPortes - Li:%d  Bois:%d  Terre:%d  Roche:%d\nBase   - Li:%d  Bois:%d  Terre:%d  Roche:%d\nLampe: %d%%   Torches: %d   |   %s\n%s" % [obj, int(hp), int(MAX_HP), bagline, res_lithium, res_wood, res_dirt, res_rock, store_lithium, store_wood, store_dirt, store_rock, int(lamp_fuel / LAMP_AUTONOMY * 100.0), torches.size(), base_line, hint]
 
 # --- Boucle -----------------------------------------------------------------
 func _physics_process(delta: float) -> void:
@@ -240,6 +272,7 @@ func _process(delta: float) -> void:
 	_update_aim()
 	_deplete_lamp(delta)
 	_produce(delta)
+	_check_artefact()
 	_handle_dig(delta)
 	_update_flashes(delta)
 	_update_hud()
@@ -273,6 +306,8 @@ func _input(event: InputEvent) -> void:
 			_refuel()
 		elif event.keycode == KEY_T:
 			_place_torch()
+		elif event.keycode == KEY_F or event.physical_keycode == KEY_F:
+			_place_ladder()
 		elif event.keycode == KEY_E:
 			_interact()
 		elif event.keycode == KEY_Q:
@@ -300,6 +335,56 @@ func _place_torch() -> void:
 func _bag_total() -> int:
 	return res_dirt + res_rock + res_wood + res_lithium
 
+func _on_ladder() -> bool:
+	var x0 := int((pos.x - half.x + 2) / TILE)
+	var x1 := int((pos.x + half.x - 2) / TILE)
+	var y0 := int((pos.y - half.y) / TILE)
+	var y1 := int((pos.y + half.y) / TILE)
+	for cy in range(y0, y1 + 1):
+		for cx in range(x0, x1 + 1):
+			if _tile(cx, cy) == LADDER:
+				return true
+	return false
+
+func _place_ladder() -> void:
+	# Pose une échelle dans la colonne, des pieds vers le haut, en remplissant le
+	# vide jusqu'au premier bloc plein (1 bois par tuile). Idéal pour remonter un puits.
+	var cx := int(pos.x / TILE)
+	var ty := int((pos.y + half.y - 1) / TILE)
+	var placed := 0
+	while placed < LADDER_MAX and ty >= 0:
+		var t := _tile(cx, ty)
+		if t == EMPTY:
+			if res_wood <= 0:
+				break
+			grid[ty * GRID_W + cx] = LADDER
+			res_wood -= 1
+			placed += 1
+		elif t == LADDER:
+			pass   # traverse une échelle existante pour l'allonger plus haut
+		else:
+			break  # bloc plein → on s'arrête
+		ty -= 1
+	if placed > 0:
+		_flash_msg("Echelle posee : %d tuiles (-%d bois)" % [placed, placed])
+	else:
+		_flash_msg("Echelle : rien a poser (pas de place ou pas de bois)")
+	_update_hud()
+
+func _check_artefact() -> void:
+	if has_artefact:
+		return
+	var x0 := int((pos.x - half.x) / TILE)
+	var x1 := int((pos.x + half.x) / TILE)
+	var y0 := int((pos.y - half.y) / TILE)
+	var y1 := int((pos.y + half.y) / TILE)
+	for cy in range(y0, y1 + 1):
+		for cx in range(x0, x1 + 1):
+			if _tile(cx, cy) == ARTEFACT:
+				grid[cy * GRID_W + cx] = EMPTY
+				has_artefact = true
+				_flash_msg("Artefact recupere ! Rentre le deposer a la base.")
+
 func _damage(amount: float) -> void:
 	hp = maxf(0.0, hp - amount)
 	if hp <= 0.0:
@@ -308,14 +393,16 @@ func _damage(amount: float) -> void:
 
 func _die() -> void:
 	# Largue le butin transporté dans une cache (Souls). Une cache précédente est perdue.
-	if _bag_total() > 0:
+	if _bag_total() > 0 or has_artefact:
 		cache_active = true
 		cache_pos = pos
 		cache = {"dirt": res_dirt, "rock": res_rock, "wood": res_wood, "lithium": res_lithium}
+		cache_artefact = has_artefact
 		res_dirt = 0
 		res_rock = 0
 		res_wood = 0
 		res_lithium = 0
+		has_artefact = false
 	# Réapparition à la base, PV pleins
 	pos = base_pos
 	vel = Vector2.ZERO
@@ -337,6 +424,10 @@ func _deposit() -> void:
 	res_wood = 0
 	res_lithium = 0
 	hp = MAX_HP   # on se soigne à la base
+	if has_artefact:
+		has_artefact = false
+		won = true
+		_flash_msg("*** OBJECTIF ATTEINT ! Artefact rapporte a la base. Bravo ! ***")
 	_update_hud()
 
 func _withdraw() -> void:
@@ -366,6 +457,10 @@ func _recover_cache() -> void:
 	res_rock += cache["rock"]
 	res_wood += cache["wood"]
 	res_lithium += cache["lithium"]
+	if cache_artefact:
+		has_artefact = true
+		cache_artefact = false
+		_flash_msg("Artefact recupere dans la cache !")
 	cache_active = false
 	_update_hud()
 
@@ -435,17 +530,28 @@ func _upgrade_tool() -> void:
 # --- Déplacement + collision contre la grille -------------------------------
 func _move(delta: float) -> void:
 	var dir := 0.0
-	if Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_LEFT):
+	# Touches physiques → marche en ZQSD (AZERTY) ou WASD (QWERTY), + flèches
+	if Input.is_physical_key_pressed(KEY_A) or Input.is_key_pressed(KEY_LEFT):
 		dir -= 1.0
-	if Input.is_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT):
+	if Input.is_physical_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT):
 		dir += 1.0
 	vel.x = dir * MOVE_SPEED
 
-	if on_floor and (Input.is_key_pressed(KEY_SPACE) or Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_UP)):
-		vel.y = -JUMP_SPEED
-
-	vel.y += GRAVITY * delta
-	vel.y = clampf(vel.y, -JUMP_SPEED, 600.0)
+	var on_ladder := _on_ladder()
+	if on_ladder:
+		var climb := 0.0
+		if Input.is_physical_key_pressed(KEY_W) or Input.is_key_pressed(KEY_UP):
+			climb -= 1.0
+		if Input.is_physical_key_pressed(KEY_S) or Input.is_key_pressed(KEY_DOWN):
+			climb += 1.0
+		vel.y = climb * CLIMB_SPEED
+		if Input.is_physical_key_pressed(KEY_SPACE):
+			vel.y = -JUMP_SPEED   # sauter pour quitter l'échelle
+	else:
+		if on_floor and (Input.is_physical_key_pressed(KEY_W) or Input.is_physical_key_pressed(KEY_SPACE) or Input.is_key_pressed(KEY_UP)):
+			vel.y = -JUMP_SPEED
+		vel.y += GRAVITY * delta
+		vel.y = clampf(vel.y, -JUMP_SPEED, 600.0)
 
 	# Axe X
 	pos.x += vel.x * delta
@@ -506,12 +612,17 @@ func _handle_dig(delta: float) -> void:
 		dig_target = Vector2i(-1, -1)
 		dig_progress = 0.0
 		return
+	if _tile(tx, ty) == HARDROCK and dig_level < 1:
+		dig_target = Vector2i(-1, -1)
+		dig_progress = 0.0
+		_flash_msg("Roche dense : outil en Fer requis (atelier puis amelioration)")
+		return
 	var cell := Vector2i(tx, ty)
 	if cell != dig_target:
 		dig_target = cell
 		dig_progress = 0.0
 	dig_progress += delta
-	var need := dig_time * (ROCK_MULT if _is_hard(_tile(tx, ty)) else 1.0)
+	var need := dig_time * _dig_mult(_tile(tx, ty))
 	if dig_progress >= need:
 		_break_tile(tx, ty)
 		dig_target = Vector2i(-1, -1)
@@ -527,7 +638,7 @@ func _break_tile(tx: int, ty: int) -> void:
 	if _bag_total() >= BAG_CAP:
 		_update_hud()
 		return   # sac plein : la ressource est perdue
-	if t == ROCK:
+	if t == ROCK or t == HARDROCK:
 		res_rock += 1
 	elif t == WOOD:
 		res_wood += 1
@@ -555,14 +666,19 @@ func _is_solid(tx: int, ty: int) -> bool:
 		return false       # ciel
 	if ty >= GRID_H:
 		return true        # sol du monde
-	return grid[ty * GRID_W + tx] != EMPTY
+	var t := grid[ty * GRID_W + tx]
+	return t != EMPTY and t != ARTEFACT and t != LADDER   # artefact/échelle se traversent
 
 func _is_diggable(tx: int, ty: int) -> bool:
 	var t := _tile(tx, ty)
-	return t == DIRT or t == ROCK or t == WOOD or t == LITHIUM or t == WALL
+	return t == DIRT or t == ROCK or t == WOOD or t == LITHIUM or t == WALL or t == HARDROCK
 
-func _is_hard(t: int) -> bool:
-	return t == ROCK or t == LITHIUM or t == WALL   # creusage plus lent
+func _dig_mult(t: int) -> float:
+	if t == HARDROCK:
+		return HARD_MULT
+	if t == ROCK or t == LITHIUM or t == WALL:
+		return ROCK_MULT
+	return 1.0
 
 func _in_reach(tx: int, ty: int) -> bool:
 	var center := Vector2(tx * TILE + TILE * 0.5, ty * TILE + TILE * 0.5)
@@ -643,6 +759,7 @@ func _draw() -> void:
 	var c_wood := Color(0.55, 0.38, 0.15)
 	var c_lith := Color(0.45, 0.74, 0.80)
 	var c_wall := Color(0.30, 0.34, 0.42)
+	var c_hard := Color(0.18, 0.20, 0.26)
 	var c_lamp := Color(1.0, 0.85, 0.55)
 	var ptx := int(pos.x / TILE)
 	var pty := int(pos.y / TILE)
@@ -667,6 +784,19 @@ func _draw() -> void:
 					if sky > 0.02:
 						draw_rect(rect, Color(0.5, 0.6, 0.7, sky * 0.10))
 				continue
+			if t == ARTEFACT:
+				var ba := _brightness(tx, ty)
+				draw_rect(rect, Color(1.0, 0.92, 0.35, 0.3 + 0.7 * ba))
+				draw_rect(rect, Color(1.0, 1.0, 0.6, ba), false, 1.0)
+				continue
+			if t == LADDER:
+				var bl := _brightness(tx, ty)
+				var lc := Color(0.78, 0.56, 0.30, 0.45 + 0.55 * bl)
+				draw_rect(Rect2(tx * TILE + 3, ty * TILE, 2, TILE), lc)
+				draw_rect(Rect2(tx * TILE + TILE - 5, ty * TILE, 2, TILE), lc)
+				draw_rect(Rect2(tx * TILE + 3, ty * TILE + 4, TILE - 8, 2), lc)
+				draw_rect(Rect2(tx * TILE + 3, ty * TILE + 10, TILE - 8, 2), lc)
+				continue
 			var b := _brightness(tx, ty)
 			var col := c_dirt
 			if t == ROCK:
@@ -677,6 +807,8 @@ func _draw() -> void:
 				col = c_lith
 			elif t == WALL:
 				col = c_wall
+			elif t == HARDROCK:
+				col = c_hard
 			draw_rect(rect, Color(col.r * b, col.g * b, col.b * b))
 			draw_rect(rect, Color(0, 0, 0, 0.15 * b), false, 1.0)
 	# Éclats de creusage (feedback de cassage)
@@ -685,7 +817,7 @@ func _draw() -> void:
 		draw_rect(Rect2(f.cell.x * TILE, f.cell.y * TILE, TILE, TILE), Color(1.0, 0.9, 0.6, a * 0.7))
 	# Cible de creusage + progression
 	if dig_target.x >= 0:
-		var need := dig_time * (ROCK_MULT if _is_hard(_tile(dig_target.x, dig_target.y)) else 1.0)
+		var need := dig_time * _dig_mult(_tile(dig_target.x, dig_target.y))
 		var p: float = clampf(dig_progress / need, 0.0, 1.0)
 		var rpos := Vector2(dig_target.x * TILE, dig_target.y * TILE)
 		draw_rect(Rect2(rpos, Vector2(TILE, TILE)), Color(1, 1, 1, 0.15 + 0.35 * p))

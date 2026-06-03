@@ -22,8 +22,13 @@ de la base et travaillent automatiquement (production, défense).
 **bunkers, abris et caves** sont des **salles fixes** (conçues/préfabriquées) que l'on
 découvre. On peut poser de **petits abris-relais** de bas niveau pour se reposer et
 sécuriser un chemin.
+> 🪜 **Déplacement vertical — échelles (mécanique clé).** Le jeu est **vertical** (on remonte du
+> bas vers le haut, en alternant **cavernes** et **passages à creuser**). Pour éviter les
+> escaliers à rallonge, le joueur **construit des échelles** (en **bois**) qu'il **pose dans une
+> colonne** et **grimpe** (monter/descendre). Indispensable au confort de remontée. *(Validé en
+> prototype : pose verticale au bois + escalade.)*
 > 💡 *À détailler plus tard* : règles de creusage (tout est-il creusable ? blocs à poser ?
-> outils requis ?), gravité/effondrements, génération de la carte.
+> outils requis ?), gravité/effondrements, génération de la carte, autres aides de mobilité.
 - [ ] Validé
 
 ### Q. Que se passe-t-il quand le héros meurt ?
