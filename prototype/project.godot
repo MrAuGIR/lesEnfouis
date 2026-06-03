@@ -1,0 +1,16 @@
+; Projet Godot — Les Enfouis (prototype)
+; Jalon 0 : mouvement & creusage (grey-box, aucun art final).
+
+config_version=5
+
+[application]
+
+config/name="Les Enfouis — Prototype (Jalon 0)"
+run/main_scene="res://main.tscn"
+config/features=PackedStringArray("4.6")
+
+[display]
+
+window/size/viewport_width=960
+window/size/viewport_height=540
+window/stretch/mode="canvas_items"

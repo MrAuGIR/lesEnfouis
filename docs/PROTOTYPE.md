@@ -83,7 +83,62 @@ art final, contenu). Sinon, on **itère** sur le cœur avant d'aller plus loin.
 
 ## Notes de production
 
-- **Grey-box d'abord** : ne produire l'**art pixel final** qu'après le Jalon 4.
+- **Grey-box d'abord** : ne produire l'**art pixel final** qu'après le Jalon 4. Le **look est
+  verrouillé** ([LOOK-VERROUILLE.md](../concept-art/LOOK-VERROUILLE.md)) mais n'entre **pas**
+  dans le prototype — formes simples uniquement.
 - Garder les **valeurs** (vitesse de creusage, capacité du sac, coûts de craft, autonomie de
-  lampe) **facilement réglables** pour itérer vite.
-- La **techno n'est pas choisie ici** ; ce plan liste des systèmes, pas des outils.
+  lampe) **facilement réglables** pour itérer vite (cf. tableau ci-dessous).
+
+---
+
+## 🚀 Kickoff — prêt à démarrer
+
+### Décision préalable — moteur / techno
+🔒 **Moteur retenu : Godot 4.** Natif Ubuntu (dev), **export Windows** en un clic (objectif
+Steam), **2D de premier ordre** (`TileMap` + lumière 2D intégrés), **GDScript** rapide à itérer,
+gratuit/open-source sans royalties. Le plus **simple** pour notre genre, sans compromettre la
+suite.
+
+> Contraintes qui ont guidé le choix : **2D pixel art**, monde de **tuiles destructibles**, **dev
+> sous Ubuntu → cible Windows/Steam**, échelle **indie**, besoin d'**itérer vite** sur le game feel.
+
+### Paramètres réglables (valeurs de départ à itérer)
+Point de départ pour ressentir le jeu **dès le Jalon 0**, puis à ajuster au feeling. Ce ne sont
+**pas** des valeurs définitives — juste un socle pour ne pas partir de zéro.
+
+| Paramètre | Valeur de départ | Note |
+|-----------|------------------|------|
+| Taille de tuile | **16 px** (figé) | base du monde et du creusage |
+| Temps pour creuser 1 bloc (terre, outil de base) | ~**0,4 s** | nerf du game feel — à régler en priorité |
+| Roche / blocs durs | ×2 à ×3 plus lent | crée la valeur des meilleurs outils |
+| Ressources par bloc miné | **1** (parfois 0-2) | bois / pierre / fer |
+| Capacité du sac (départ) | **~20 emplacements** | tension d'extraction ; améliorable |
+| Autonomie de la lampe | **~3 min** de marche | carburant = bois ; alerte quand bas |
+| Portée du halo de lampe | **~5-6 tuiles** | le reste s'assombrit/désature |
+| Durée de vie de la cache (à la mort) | **persistante** au proto | simplifie ; on testera l'expiration plus tard |
+| Coût craft outil Pierre → Fer | **~10 fer + 5 bois** | premier palier de progression |
+| PNJ : production passive | **1 ressource / ~30 s** | sensation de base qui « tourne » |
+
+### Jalon 0 — découpage en tâches concrètes *(premier sprint)*
+1. **Projet vide** qui ouvre une fenêtre + boucle de jeu (rendu/clavier/souris).
+2. **Grille de tuiles** affichée (formes pleines, 2-3 couleurs : terre / roche / vide).
+3. **Personnage** (rectangle) : déplacement clavier + **gravité/collision** simple.
+4. **Creuser** : clic souris sur une tuile adjacente → la tuile disparaît (avec délai du tableau).
+5. **Feedback de creusage** : petit effet (fissures/particules/son provisoire) — **le nerf du fun**.
+6. **Ramassage** : la tuile minée ajoute **+1 ressource** à un compteur à l'écran.
+- **DoD (fait quand)** : on creuse librement dans la grille et on accumule 2-3 ressources, et
+  **creuser procure déjà une petite satisfaction** (sinon, itérer sur 4-5 avant d'avancer).
+
+### Checklist de démarrage
+- [x] **Moteur choisi** — **Godot 4.6** (cf. ci-dessus).
+- [x] Dépôt/projet initialisé + lancement qui tourne — `prototype/` ([README](../prototype/README.md)).
+- [x] Valeurs réglables exposées en haut de `prototype/scripts/Game.gd`.
+- [ ] **Jalon 0 joué et auto-évalué** sur le fun du creusage (H1) — *à faire : playtest*.
+- [ ] Décider : on continue au Jalon 1, ou on **itère** le creusage.
+
+### Garde-fous
+- **On teste UNE chose** : le fun du cœur (`creuser → récolter → revenir`). Pas de combat, pas
+  d'art final, pas de contenu — tout est listé « HORS prototype » plus haut.
+- **Time-box** chaque jalon : si un jalon traîne, simplifier plutôt qu'enrichir.
+- Si **H1-H4 ne se valident pas**, on **itère le cœur** avant toute production — c'est le but même
+  de ce prototype.

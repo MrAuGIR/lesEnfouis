@@ -5,9 +5,12 @@
 >
 > 🎨 **Brief prêt à confier à un designer : [BRIEF-DIRECTION-ARTISTIQUE.md](BRIEF-DIRECTION-ARTISTIQUE.md).**
 >
-> 🖼️ **Concept art (itérations designer) :** dossier [`concept-art/`](../concept-art/) — 1re planche
-> ([couche Industrielle](../concept-art/planche-style-couche-industrielle.png)) +
-> [retour structuré](../concept-art/retour-planche-01-industriel.md).
+> 🔒 **LOOK VERROUILLÉ — bible visuelle de référence : [LOOK-VERROUILLE.md](../concept-art/LOOK-VERROUILLE.md).**
+>
+> 🖼️ **Concept art (planches livrées) :** dossier [`concept-art/`](../concept-art/) —
+> [Industrielle](../concept-art/planche-style-couche-industrielle.png) ·
+> [héros](../concept-art/concept-hero.png) · [robot](../concept-art/concept_enemis_robot.png) ·
+> [HUD](../concept-art/concept_hud.png) (+ retours).
 
 ---
 
@@ -24,21 +27,23 @@ de **blocs/tuiles creusables** (cf. Terraria/Minecraft) : lisible, nostalgique e
 - [x] Validé
 
 ### Q. Comment traduire le ton (sombre + humour Fallout + mystère Metro) en image ?
-**R.** 🟡 Proposition : palette **colorée mais un peu désaturée/contrastée**, **éclairage à
-la lampe/torche** pour le mystère (zones d'ombre marquées), et **détails décalés** (affiches
-de propagande, objets rétro-futuristes façon Fallout) pour l'humour. Chaque couche pousse sa
-propre teinte.
-> 💡 *À confirmer/affiner.*
-- [ ] Validé
+**R.** ✅ **Validé par le concept art.** Palette **colorée mais un peu désaturée/contrastée**,
+**éclairage à la lampe/torche** pour le mystère (zones d'ombre marquées), et **détails décalés**
+(affiches de propagande, objets rétro-futuristes façon Fallout) pour l'humour. Chaque couche
+pousse sa propre teinte.
+> 🔒 Confirmé par les planches [Industriel](../concept-art/planche-style-couche-industrielle.png),
+> [héros](../concept-art/concept-hero.png) et [robot](../concept-art/concept_enemis_robot.png).
+- [x] Validé
 
 ### Q. Chaque couche/civilisation a-t-elle une identité visuelle distincte ?
 **R.** ✅ **Oui, identité forte par couche** : palette, architecture et props distincts pour
 chaque civilisation/époque. Aide à se repérer dans la verticalité et **raconte
 visuellement** l'empilement des civilisations.
-> 💡 *Palettes définies* par couche en [06](06-contenu-progression.md) : Antiquité = ocres
+> 🔒 *Palettes définies* par couche en [06](06-contenu-progression.md) : Antiquité = ocres
 > chauds · Médiéval = gris-bleu froid · Industriel = acier/rouille + néon · Surface =
-> gris-jaune toxique. Reste à produire les planches pixel art.
-- [ ] Validé
+> gris-jaune toxique. **Validé** sur la couche Industrielle (planche de référence) ; les autres
+> couches déclinent la même grammaire.
+- [x] Validé
 
 ### Q. Comment gérer la lumière / la visibilité sous terre ?
 **R.** ✅ **Vraie mécanique de lumière** : l'obscurité limite la vision ; le héros dépend
@@ -46,18 +51,22 @@ d'une **lampe / torches** pour voir et progresser (enjeu de tension façon Metro
 = le bois** (torches/recharges), ce qui lie creusage et lumière. **Près de la surface**, les
 **gaz de pollution** imposent un **éclairage spécial à crafter** — un véritable palier de
 progression.
-> 💡 *À détailler* : autonomie/portée de la lampe, torches fixes posables, recette de
-> l'éclairage anti-pollution.
-- [ ] Validé
+> 🔒 **Direction figée** : lampe **frontale (casque)** retenue pour le héros (mains libres).
+> *À régler au prototype* (valeurs) : autonomie/portée de la lampe, torches fixes posables,
+> recette de l'éclairage anti-pollution.
+- [x] Validé
 
 ### Q. Approche d'animation (compatible petite équipe) ?
-**R.** 🟡 Proposition (suite au choix pixel art) : **animation pixel art image par image**,
-volontairement **sobre** (peu de frames par action) pour rester réaliste en production indie.
-> 💡 *À confirmer.*
-- [ ] Validé
+**R.** ✅ **Confirmé** : **animation pixel art image par image**, volontairement **sobre** (peu
+de frames par action) pour rester réaliste en production indie.
+> 🔒 Direction validée. *Les sprite sheets d'animation se briefent par lots **après** le
+> prototype (grey-box d'abord).*
+- [x] Validé
 
 ### Q. Style de l'UI/HUD ?
 **R.** ✅ **Rétro-futuriste / terminal** : interface type écran d'ordinateur / Pip-Boy
 (Fallout) et jauges façon Metro. Renforce fortement l'univers post-apo.
-> 💡 *À détailler* : déclinaison concrète du HUD en [07](07-ux-ui-accessibilite.md).
-- [ ] Validé
+> 🔒 **Validé par la planche [HUD](../concept-art/concept_hud.png)** ([retour](../concept-art/retour-concept-hud.md)).
+> Point à régler : différencier le **rouge d'alerte UI** du **rouge de menace** (optique robot /
+> danger). Déclinaison en [07](07-ux-ui-accessibilite.md).
+- [x] Validé
