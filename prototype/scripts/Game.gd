@@ -9,6 +9,13 @@ const GRID_W := 240
 const GRID_H := 240
 const AIR_ROWS := 8         # rangées de ciel/vide en haut
 
+# Bunkers abandonnés (seule source de bois : structures humaines, pas le sol)
+const STRUCT_COUNT := 60
+const STRUCT_MIN_W := 6
+const STRUCT_MAX_W := 10
+const STRUCT_MIN_H := 4
+const STRUCT_MAX_H := 6
+
 const MOVE_SPEED := 98.0    # px/s
 const GRAVITY := 900.0
 const JUMP_SPEED := 300.0
@@ -31,10 +38,20 @@ const SKY_FADE := 14.0      # profondeur sur laquelle la lumière du jour décli
 const SKY_STRENGTH := 1.0   # intensité de la lumière du jour en surface
 const AMBIENT_MIN := 0.05   # luminosité minimale (le noir n'est jamais total)
 
+# --- Carburant & torches ----------------------------------------------------
+const LAMP_AUTONOMY := 240.0     # secondes d'autonomie pleine de la lampe
+const LAMP_LOW := 20.0           # sous ce reste (s), la lampe faiblit
+const LAMP_REFILL := 90.0        # secondes rendues par unité de lithium (touche R)
+const TORCH_RADIUS := 5.5        # tuiles : portée d'une torche posée
+const TORCH_CORE := 1.5          # tuiles : pleine lumière au pied de la torche
+
 # Types de tuile
 const EMPTY := 0
 const DIRT := 1
 const ROCK := 2
+const WOOD := 3    # étais de bois (dans la terre) → torches + construction/craft
+const LITHIUM := 4 # minerai de lithium (dans la roche) → recharge la lampe frontale
+const WALL := 5    # béton d'un bunker abandonné (creusable, sans ressource : gravats)
 
 # --- État -------------------------------------------------------------------
 var grid := PackedByteArray()
@@ -50,6 +67,12 @@ var dig_progress := 0.0
 
 var res_dirt := 0
 var res_rock := 0
+var res_wood := 0
+var res_lithium := 0
+
+var lamp_fuel := LAMP_AUTONOMY    # carburant restant (secondes)
+var lamp_factor := 1.0            # 0..1 : intensité de la lampe selon le carburant
+var torches: Array[Vector2i] = [] # torches posées (sécurisent un chemin)
 
 var flashes := []   # éclats de creusage : {cell:Vector2i, t:float}
 
@@ -99,7 +122,34 @@ func _generate_world() -> void:
 					var thresh := 0.5 - clampf(depth / 120.0, 0.0, 0.3)
 					if rock_noise.get_noise_2d(float(x), float(y)) > thresh:
 						t = ROCK
+					# Lithium : petits dépôts, plus fréquents dans la roche
+					var lith_chance := 0.10 if t == ROCK else 0.02
+					if randf() < lith_chance:
+						t = LITHIUM
 			grid[y * GRID_W + x] = t
+	_place_structures()
+
+func _place_structures() -> void:
+	# Bunkers abandonnés : petites salles en béton contenant du bois (seule source).
+	for n in STRUCT_COUNT:
+		var w := randi_range(STRUCT_MIN_W, STRUCT_MAX_W)
+		var h := randi_range(STRUCT_MIN_H, STRUCT_MAX_H)
+		var x0 := randi_range(2, GRID_W - w - 2)
+		var y0 := randi_range(AIR_ROWS + 14, GRID_H - h - 2)
+		_carve_structure(x0, y0, w, h)
+	# Un bunker garanti juste sous le point de départ (pour amorcer la partie)
+	var cx := int(GRID_W * 0.5)
+	_carve_structure(cx - 4, surface[cx] + 8, 9, 5)
+
+func _carve_structure(x0: int, y0: int, w: int, h: int) -> void:
+	for y in range(y0, y0 + h):
+		for x in range(x0, x0 + w):
+			var border := x == x0 or x == x0 + w - 1 or y == y0 or y == y0 + h - 1
+			grid[y * GRID_W + x] = WALL if border else EMPTY
+	# Rangée de caisses/poutres de bois sur le sol intérieur (bois garanti)
+	var floor_y := y0 + h - 2
+	for x in range(x0 + 1, x0 + w - 1):
+		grid[floor_y * GRID_W + x] = WOOD
 
 func _spawn_player() -> void:
 	var cx := int(GRID_W * 0.5)
@@ -123,7 +173,7 @@ func _make_hud() -> void:
 	_update_hud()
 
 func _update_hud() -> void:
-	hud.text = "Terre: %d    Roche: %d\n[A/D ou ←/→] bouger   [Espace] sauter   [Clic gauche] creuser" % [res_dirt, res_rock]
+	hud.text = "Lithium: %d   Bois: %d   Terre: %d   Roche: %d\nLampe: %d%%    Torches: %d\n[A/D] bouger  [Espace] sauter  [Clic] creuser  [R] recharger lampe (lithium)  [T] torche (bois)" % [res_lithium, res_wood, res_dirt, res_rock, int(lamp_fuel / LAMP_AUTONOMY * 100.0), torches.size()]
 
 # --- Boucle -----------------------------------------------------------------
 func _physics_process(delta: float) -> void:
@@ -133,14 +183,38 @@ func _physics_process(delta: float) -> void:
 
 func _process(delta: float) -> void:
 	_update_aim()
+	_deplete_lamp(delta)
 	_handle_dig(delta)
 	_update_flashes(delta)
+	_update_hud()
 	queue_redraw()
 
 func _update_aim() -> void:
 	var v := get_global_mouse_position() - pos
 	if v.length() > 1.0:
 		aim = v.normalized()
+
+func _deplete_lamp(delta: float) -> void:
+	lamp_fuel = maxf(0.0, lamp_fuel - delta)
+	lamp_factor = clampf(lamp_fuel / LAMP_LOW, 0.0, 1.0)
+
+func _input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo:
+		if event.keycode == KEY_R:
+			_refuel()
+		elif event.keycode == KEY_T:
+			_place_torch()
+
+func _refuel() -> void:
+	if res_lithium > 0 and lamp_fuel < LAMP_AUTONOMY:
+		res_lithium -= 1
+		lamp_fuel = minf(LAMP_AUTONOMY, lamp_fuel + LAMP_REFILL)
+
+func _place_torch() -> void:
+	var cell := Vector2i(int(floor(pos.x / TILE)), int(floor(pos.y / TILE)))
+	if res_wood > 0 and not _is_solid(cell.x, cell.y) and not torches.has(cell):
+		res_wood -= 1
+		torches.append(cell)
 
 # --- Déplacement + collision contre la grille -------------------------------
 func _move(delta: float) -> void:
@@ -217,7 +291,7 @@ func _handle_dig(delta: float) -> void:
 		dig_target = cell
 		dig_progress = 0.0
 	dig_progress += delta
-	var need := DIG_TIME * (ROCK_MULT if _tile(tx, ty) == ROCK else 1.0)
+	var need := DIG_TIME * (ROCK_MULT if _is_hard(_tile(tx, ty)) else 1.0)
 	if dig_progress >= need:
 		_break_tile(tx, ty)
 		dig_target = Vector2i(-1, -1)
@@ -228,6 +302,12 @@ func _break_tile(tx: int, ty: int) -> void:
 	grid[ty * GRID_W + tx] = EMPTY
 	if t == ROCK:
 		res_rock += 1
+	elif t == WOOD:
+		res_wood += 1
+	elif t == LITHIUM:
+		res_lithium += 1
+	elif t == WALL:
+		pass   # béton : gravats, aucune ressource
 	else:
 		res_dirt += 1
 	flashes.append({"cell": Vector2i(tx, ty), "t": 0.18})
@@ -255,7 +335,10 @@ func _is_solid(tx: int, ty: int) -> bool:
 
 func _is_diggable(tx: int, ty: int) -> bool:
 	var t := _tile(tx, ty)
-	return t == DIRT or t == ROCK
+	return t == DIRT or t == ROCK or t == WOOD or t == LITHIUM or t == WALL
+
+func _is_hard(t: int) -> bool:
+	return t == ROCK or t == LITHIUM or t == WALL   # creusage plus lent
 
 func _in_reach(tx: int, ty: int) -> bool:
 	var center := Vector2(tx * TILE + TILE * 0.5, ty * TILE + TILE * 0.5)
@@ -282,16 +365,34 @@ func _lamp_light(tx: int, ty: int) -> float:
 		var ang := clampf((dir.dot(aim) - LAMP_COS_OUTER) / (LAMP_COS_INNER - LAMP_COS_OUTER), 0.0, 1.0)
 		var rad := 1.0 - clampf((d - LAMP_BEAM_CORE) / (LAMP_BEAM_RANGE - LAMP_BEAM_CORE), 0.0, 1.0)
 		beam = ang * rad * rad
-	var lit := maxf(amb, beam)
+	var lit := maxf(amb, beam) * lamp_factor
 	# Occlusion : la lumière s'arrête au premier bloc plein (ligne de vue)
 	if lit > 0.02 and not _los_clear(tx, ty):
 		return 0.0
 	return clampf(lit, 0.0, 1.0)
 
+func _torch_light(tx: int, ty: int) -> float:
+	var best := 0.0
+	for c in torches:
+		var src := Vector2(c.x + 0.5, c.y + 0.5)
+		var d := src.distance_to(Vector2(tx + 0.5, ty + 0.5))
+		if d >= TORCH_RADIUS:
+			continue
+		var l := 1.0 - clampf((d - TORCH_CORE) / (TORCH_RADIUS - TORCH_CORE), 0.0, 1.0)
+		l = l * l
+		if l <= best:
+			continue
+		if l > 0.02 and not _los_clear_from(src, tx, ty):
+			continue
+		best = l
+	return best
+
 func _los_clear(tx: int, ty: int) -> bool:
-	# Vrai si rien de plein ne bloque entre le héros et la tuile (cible exclue :
+	return _los_clear_from(Vector2(pos.x / TILE, pos.y / TILE), tx, ty)
+
+func _los_clear_from(a: Vector2, tx: int, ty: int) -> bool:
+	# Vrai si rien de plein ne bloque entre la source et la tuile (cible exclue :
 	# le mur qu'on regarde est éclairé sur sa face, mais pas ce qu'il y a derrière).
-	var a := Vector2(pos.x / TILE, pos.y / TILE)
 	var b := Vector2(tx + 0.5, ty + 0.5)
 	var steps := int(ceil(a.distance_to(b) * 2.0))
 	if steps <= 1:
@@ -307,12 +408,17 @@ func _los_clear(tx: int, ty: int) -> bool:
 	return true
 
 func _brightness(tx: int, ty: int) -> float:
-	return clampf(maxf(_sky_light(tx, ty) * SKY_STRENGTH, _lamp_light(tx, ty)), AMBIENT_MIN, 1.0)
+	var light := maxf(_sky_light(tx, ty) * SKY_STRENGTH, _lamp_light(tx, ty))
+	light = maxf(light, _torch_light(tx, ty))
+	return clampf(light, AMBIENT_MIN, 1.0)
 
 # --- Rendu (grey-box) -------------------------------------------------------
 func _draw() -> void:
 	var c_dirt := Color(0.42, 0.30, 0.20)
 	var c_rock := Color(0.40, 0.42, 0.46)
+	var c_wood := Color(0.55, 0.38, 0.15)
+	var c_lith := Color(0.45, 0.74, 0.80)
+	var c_wall := Color(0.30, 0.34, 0.42)
 	var c_lamp := Color(1.0, 0.85, 0.55)
 	var ptx := int(pos.x / TILE)
 	var pty := int(pos.y / TILE)
@@ -328,17 +434,25 @@ func _draw() -> void:
 			var rect := Rect2(tx * TILE, ty * TILE, TILE, TILE)
 			var t := _tile(tx, ty)
 			if t == EMPTY:
-				# Halo de la lampe / lumière du jour visibles dans le vide
-				var lamp := _lamp_light(tx, ty)
-				if lamp > 0.02:
-					draw_rect(rect, Color(c_lamp.r, c_lamp.g, c_lamp.b, lamp * 0.22))
+				# Halo de la lampe / des torches / du jour, visibles dans le vide
+				var glow := maxf(_lamp_light(tx, ty), _torch_light(tx, ty))
+				if glow > 0.02:
+					draw_rect(rect, Color(c_lamp.r, c_lamp.g, c_lamp.b, glow * 0.22))
 				elif ty < surface[clampi(tx, 0, GRID_W - 1)] + 2:
 					var sky := _sky_light(tx, ty)
 					if sky > 0.02:
 						draw_rect(rect, Color(0.5, 0.6, 0.7, sky * 0.10))
 				continue
 			var b := _brightness(tx, ty)
-			var col := c_dirt if t == DIRT else c_rock
+			var col := c_dirt
+			if t == ROCK:
+				col = c_rock
+			elif t == WOOD:
+				col = c_wood
+			elif t == LITHIUM:
+				col = c_lith
+			elif t == WALL:
+				col = c_wall
 			draw_rect(rect, Color(col.r * b, col.g * b, col.b * b))
 			draw_rect(rect, Color(0, 0, 0, 0.15 * b), false, 1.0)
 	# Éclats de creusage (feedback de cassage)
@@ -347,12 +461,17 @@ func _draw() -> void:
 		draw_rect(Rect2(f.cell.x * TILE, f.cell.y * TILE, TILE, TILE), Color(1.0, 0.9, 0.6, a * 0.7))
 	# Cible de creusage + progression
 	if dig_target.x >= 0:
-		var need := DIG_TIME * (ROCK_MULT if _tile(dig_target.x, dig_target.y) == ROCK else 1.0)
+		var need := DIG_TIME * (ROCK_MULT if _is_hard(_tile(dig_target.x, dig_target.y)) else 1.0)
 		var p: float = clampf(dig_progress / need, 0.0, 1.0)
 		var rpos := Vector2(dig_target.x * TILE, dig_target.y * TILE)
 		draw_rect(Rect2(rpos, Vector2(TILE, TILE)), Color(1, 1, 1, 0.15 + 0.35 * p))
 		draw_rect(Rect2(rpos, Vector2(TILE, TILE)), Color(1, 1, 1, 0.7), false, 1.0)
-	# Halo central + héros (le héros porte la lumière)
-	draw_circle(pos, LAMP_AMBIENT_CORE * TILE, Color(c_lamp.r, c_lamp.g, c_lamp.b, 0.10))
+	# Torches posées
+	for c in torches:
+		var tc := Vector2(c.x * TILE + TILE * 0.5, c.y * TILE + TILE * 0.5)
+		draw_circle(tc, TORCH_CORE * TILE, Color(1.0, 0.7, 0.3, 0.12))
+		draw_rect(Rect2(tc + Vector2(-2, -5), Vector2(4, 10)), Color(1.0, 0.75, 0.35))
+	# Halo central + héros (le héros porte la lumière ; le halo faiblit avec le carburant)
+	draw_circle(pos, LAMP_AMBIENT_CORE * TILE, Color(c_lamp.r, c_lamp.g, c_lamp.b, 0.10 * lamp_factor))
 	draw_rect(Rect2(pos - half, half * 2.0), Color(0.95, 0.85, 0.5))
 	draw_rect(Rect2(pos - half, half * 2.0), Color(0.2, 0.15, 0.05, 0.8), false, 1.0)

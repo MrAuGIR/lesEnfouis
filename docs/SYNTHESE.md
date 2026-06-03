@@ -34,8 +34,8 @@ humains et robots, et **reconstituer la vérité**.
 - **Lumière :** vraie mécanique — torches (bois) ; **éclairage anti-pollution à crafter** près de la surface.
 - **Combat :** temps réel, **visée souris**, mêlée **ou** arme à feu, **munitions rares** (loot + craft) ; rareté = paliers de **stats** ; **légendaires** lootées sur les **boss de couche**.
 - **Extraction :** **sac limité** ; à la mort, retour à la base et **butin récupérable** sur une cache (façon Souls). Auto-sauvegarde.
-- **Base (Fallout Shelter) :** bibliothèque de pièces (production des 6 ressources, crafting, **bunker/défense**, stockage, infirmerie, dortoir) + **PNJ autonomes** ; **raids réguliers** à repousser.
-- **Ressources (AoE) :** Bois (build + torches) · Pierre (build) · Fer (équipement) · Or (monnaie) · Eau & Nourriture (soin).
+- **Base (Fallout Shelter) :** bibliothèque de pièces (production des ressources, crafting, **bunker/défense**, stockage, infirmerie, dortoir) + **PNJ autonomes** ; **raids réguliers** à repousser.
+- **Ressources (AoE) :** Bois (build + torches) · Lithium (recharge lampe frontale) · Pierre (build) · Fer (équipement) · Or (monnaie) · Eau & Nourriture (soin).
 - **Progression :** équipement (loot/craft) + outils de creusage + **compétences du héros à l'usage**.
 
 ## Monde — 3 couches + Surface (on remonte le temps)

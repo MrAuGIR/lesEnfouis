@@ -47,8 +47,10 @@ enfin). Boss final : **l'IA** qui contrôle les robots de surface.
 - [ ] Validé
 
 ### Q. Quelles ressources, et à quoi sert chacune ?
-**R.** ✅ Six ressources (façon Age of Empires), aux rôles définis :
-- **Bois** → construction des pièces **et carburant des torches** (mécanique de lumière, cf. [04](04-direction-artistique.md)).
+**R.** ✅ Sept ressources (façon Age of Empires), aux rôles définis :
+- **Bois** → construction des pièces **et carburant des torches** (flamme — mécanique de lumière, cf. [04](04-direction-artistique.md)). **Source : structures humaines** (bunkers / bases abandonnés à fouiller) + **marchands**, et abondant en **Médiéval/Surface** (charpentes, ruines, arbres) — **pas** dans la terre brute (c'est un matériau manufacturé/organique).
+- **Lithium** → **recharge de la lampe frontale** (électrique), **miné dans la roche**. La lumière portée par le héros n'est donc pas au feu mais à la pile — cohérent avec le casque.
+> 🧭 **Règle lisible** : on obtient les **minerais** (pierre, fer, lithium) en **creusant** ; les **matériaux manufacturés** (bois, équipement) en **fouillant des structures** ou via le **commerce**. Deux activités, deux récompenses.
 - **Pierre** → construction et amélioration des **pièces de base**.
 - **Fer** → **armes, outils et armures** (équipement).
 - **Or** → **monnaie / échange** (commerce — implique des marchands, cf. [03](03-personnages-ennemis.md)).

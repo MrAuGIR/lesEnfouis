@@ -35,7 +35,7 @@ d'**extraction** (façon Metro).
 - [ ] Validé
 
 ### Q. Comment fonctionnent les ressources ?
-**R.** ✅ Panel façon Age of Empires : **eau, nourriture, bois, fer, pierre, or**. Elles
+**R.** ✅ Panel façon Age of Empires : **eau, nourriture, bois, lithium, fer, pierre, or**. Elles
 servent au **craft, à la construction et au soin** — **pas** d'entretien vital d'une
 population (les PNJ ne meurent pas de faim). Produites par les pièces de base (avec PNJ) et
 récoltées en exploration.

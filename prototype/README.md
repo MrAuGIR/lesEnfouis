@@ -30,10 +30,14 @@ godot --editor --path prototype
 - **Jalon 0 — mouvement & creusage** : déplacement avec gravité/collision, creusage à la souris
   avec progression + éclat de cassage, compteur de ressources (terre/roche). ✅
 - **Jalon 1 — génération & lumière** : monde généré par **bruit** (relief de surface, cavités,
-  filons de roche plus fréquents en profondeur) ; **mécanique de lumière** : obscurité +
+  filons de roche, **bunkers abandonnés** préfabriqués) ; **mécanique de lumière** : obscurité +
   **lampe frontale (casque)** = **faisceau dirigé vers la souris** + halo doux autour du corps,
-  et lumière du jour qui décline avec la profondeur. ✅
-  *(Prochaine sous-étape : carburant de la lampe + torches posables.)*
+  lumière du jour déclinant avec la profondeur, et **occlusion** (la lumière s'arrête aux murs). ✅
+- **Jalon 1b — carburant & torches** : la **lampe frontale se vide** (autonomie limitée) et
+  **faiblit** quand l'énergie est basse. Deux énergies distinctes et **deux origines** :
+  on **mine du lithium** (dans la roche) pour **recharger la lampe** (`R`), et on **récupère du
+  bois dans les bunkers abandonnés** (structures en béton) pour **poser des torches** (`T`,
+  flamme). Le bois ne se trouve **pas** dans la terre — c'est un matériau humain à fouiller. ✅
 - Tout est piloté par `scripts/Game.gd` ; les **valeurs réglables** (vitesse de creusage,
   gravité, saut, portée, **rayon/portée de lumière**…) sont en haut du script.
 

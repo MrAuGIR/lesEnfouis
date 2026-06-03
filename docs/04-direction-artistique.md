@@ -47,8 +47,9 @@ visuellement** l'empilement des civilisations.
 
 ### Q. Comment gérer la lumière / la visibilité sous terre ?
 **R.** ✅ **Vraie mécanique de lumière** : l'obscurité limite la vision ; le héros dépend
-d'une **lampe / torches** pour voir et progresser (enjeu de tension façon Metro). **Carburant
-= le bois** (torches/recharges), ce qui lie creusage et lumière. **Près de la surface**, les
+d'une **lampe / torches** pour voir et progresser (enjeu de tension façon Metro). **Deux sources,
+deux carburants** : la **lampe frontale (électrique) → lithium** (minerai miné dans la roche) ;
+les **torches posables (flamme) → bois**. **Près de la surface**, les
 **gaz de pollution** imposent un **éclairage spécial à crafter** — un véritable palier de
 progression.
 > 🔒 **Direction figée** : lampe **frontale (casque)** retenue pour le héros (mains libres).

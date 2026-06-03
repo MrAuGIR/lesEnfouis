@@ -14,8 +14,8 @@
 **DANS le prototype**
 - 1 **héros contrôlable** : déplacement + **creuser** (visée souris).
 - **Terrain creusable généré** sur **1 couche**, avec quelques **cavités/bunkers préfabriqués** placés.
-- **Mécanique de lumière** : obscurité + lampe/**torches** (carburant = bois).
-- **3 ressources** suffisent (ex. **bois, pierre, fer**).
+- **Mécanique de lumière** : obscurité + lampe frontale (**lithium**) + **torches** (**bois**).
+- Quelques **ressources** suffisent (ex. **terre, roche, bois, lithium**).
 - **Sac à capacité limitée** + **dépôt** au stockage.
 - **Mort** : retour base + **cache récupérable** sur place.
 - **Base minimale** : 2-3 pièces (**stockage**, **1 production**, **atelier**) + **1 PNJ** affectable.
@@ -35,7 +35,7 @@ destructible) ; les blocs minés deviennent des ressources dans un sac. Aucun ar
 
 ### Jalon 1 — Génération du monde + lumière
 Génération procédurale d'**une couche** (terre/roche creusable) avec quelques **préfabriqués**
-placés. **Lumière** : l'obscurité limite la vision ; torches/lampe consommant du **bois**.
+placés. **Lumière** : l'obscurité limite la vision ; **lampe frontale au lithium** + **torches au bois**.
 - **But :** explorer un sous-sol sombre est-il **lisible et tendu** ?
 - **Fait quand :** un monde généré est explorable et l'obscurité oblige à gérer la lumière.
 
@@ -113,7 +113,7 @@ Point de départ pour ressentir le jeu **dès le Jalon 0**, puis à ajuster au f
 | Roche / blocs durs | ×2 à ×3 plus lent | crée la valeur des meilleurs outils |
 | Ressources par bloc miné | **1** (parfois 0-2) | bois / pierre / fer |
 | Capacité du sac (départ) | **~20 emplacements** | tension d'extraction ; améliorable |
-| Autonomie de la lampe | **~3 min** de marche | carburant = bois ; alerte quand bas |
+| Autonomie de la lampe | **~4 min** | carburant = **lithium** (miné dans la roche) ; faiblit quand bas |
 | Portée du halo de lampe | **~5-6 tuiles** | le reste s'assombrit/désature |
 | Durée de vie de la cache (à la mort) | **persistante** au proto | simplifie ; on testera l'expiration plus tard |
 | Coût craft outil Pierre → Fer | **~10 fer + 5 bois** | premier palier de progression |
