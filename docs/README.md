@@ -16,7 +16,7 @@
 > 📄 **Synthèse d'une page (pitch & vue d'ensemble) : [SYNTHESE.md](SYNTHESE.md)**
 > · 🛠️ **Plan de prototype (vertical slice) : [PROTOTYPE.md](PROTOTYPE.md)**
 > · 🎨 **Brief de direction artistique : [BRIEF-DIRECTION-ARTISTIQUE.md](BRIEF-DIRECTION-ARTISTIQUE.md)**
-> · 🖼️ **Concept art (itérations designer) : [`concept-art/`](../concept-art/)** — [couche Industrielle](../concept-art/planche-style-couche-industrielle.png) · [héros](../concept-art/concept-hero.png) (+ retours) · briefs : [robot](../concept-art/brief-concept-ennemi-robot.md), [HUD](../concept-art/brief-concept-hud.md)
+> · 🖼️ **Concept art (itérations designer) : [`concept-art/`](../concept-art/)** — [couche Industrielle](../concept-art/planche-style-couche-industrielle.png) · [héros](../concept-art/concept-hero.png) · [ennemi robot](../concept-art/concept_enemis_robot.png) (+ retours) · brief en attente : [HUD](../concept-art/brief-concept-hud.md)
 
 ## Pitch (état actuel)
 

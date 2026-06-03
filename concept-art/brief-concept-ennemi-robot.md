@@ -1,5 +1,10 @@
 # Brief de concept — L'ennemi Robot
 
+> ✅ **Réponse du designer reçue :** planche [`concept_enemis_robot.png`](concept_enemis_robot.png) +
+> [retour structuré](retour-concept-ennemi-robot.md). **Décisions figées :** emblème « N »
+> assumé comme indice (sans nommer NAPOLÉON avant le climax) · **optiques différenciées**
+> (solitaires = ambre vacillant · contrôlés = rouge fixe).
+>
 > **À l'attention du / de la designer.** Brief ciblé pour concevoir la **famille d'ennemis
 > robots**. Étape **concept** : trouver le **langage visuel de la menace mécanique** + la
 > lisibilité, **pas** les sprite sheets finaux.

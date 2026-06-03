@@ -3,6 +3,8 @@
 > Qui joue-t-on, qui peuple le monde, et à quoi s'oppose-t-on ?
 >
 > 🧑 **Briefs de concept pour le designer :** [Le Héros](../concept-art/brief-concept-heros.md) (modules de l'avatar) · [L'ennemi Robot](../concept-art/brief-concept-ennemi-robot.md) (langage visuel + deux registres lore).
+>
+> 🖼️ **Planches livrées :** [héros](../concept-art/concept-hero.png) ([retour](../concept-art/retour-concept-heros.md)) · [ennemi robot](../concept-art/concept_enemis_robot.png) ([retour](../concept-art/retour-concept-ennemi-robot.md)).
 
 ---
 
