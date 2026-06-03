@@ -19,11 +19,14 @@ Ouvrir dans l'éditeur Godot :
 godot --editor --path prototype
 ```
 
-## Contrôles (Jalon 0)
+## Contrôles
 
-- **A / D** ou **← / →** : se déplacer
-- **Espace / W / ↑** : sauter
+- **A / D** ou **← / →** : se déplacer · **Espace / W / ↑** : sauter
 - **Clic gauche** : creuser la tuile visée (dans le rayon autour du héros)
+- **R** : recharger la lampe (lithium) · **T** : poser une torche (bois)
+- **E** : déposer à la base (si proche) / récupérer une cache (si proche)
+- **Q** : retirer de la base vers le sac (si proche — priorité au carburant)
+- **K** : mourir (test — largue le butin dans une cache)
 
 ## État
 
@@ -38,6 +41,10 @@ godot --editor --path prototype
   on **mine du lithium** (dans la roche) pour **recharger la lampe** (`R`), et on **récupère du
   bois dans les bunkers abandonnés** (structures en béton) pour **poser des torches** (`T`,
   flamme). Le bois ne se trouve **pas** dans la terre — c'est un matériau humain à fouiller. ✅
+- **Jalon 2 — sac limité, dépôt & mort** : le **sac a une capacité** (au-delà, le butin ramassé
+  est perdu) ; on **dépose** à la **base** (zone verte au point de départ, `E`) pour vider le sac
+  et se soigner ; **PV + dégâts de chute** ; à la **mort**, le butin transporté tombe dans une
+  **cache récupérable** (`E`) sur place (façon Souls), et on **réapparaît à la base**. ✅
 - Tout est piloté par `scripts/Game.gd` ; les **valeurs réglables** (vitesse de creusage,
   gravité, saut, portée, **rayon/portée de lumière**…) sont en haut du script.
 

@@ -45,6 +45,14 @@ const LAMP_REFILL := 90.0        # secondes rendues par unité de lithium (touch
 const TORCH_RADIUS := 5.5        # tuiles : portée d'une torche posée
 const TORCH_CORE := 1.5          # tuiles : pleine lumière au pied de la torche
 
+# --- Sac, base, mort (Jalon 2) ----------------------------------------------
+const BAG_CAP := 25              # capacité du sac (nb d'objets transportés)
+const MAX_HP := 100.0
+const FALL_SAFE := 380.0         # vitesse de chute sans dégât (px/s)
+const FALL_DMG := 0.25           # dégâts par unité de vitesse au-delà du seuil
+const BASE_RANGE := 2.6 * TILE   # portée de dépôt à la base
+const CACHE_RANGE := 2.0 * TILE  # portée de récupération d'une cache
+
 # Types de tuile
 const EMPTY := 0
 const DIRT := 1
@@ -74,6 +82,16 @@ var lamp_fuel := LAMP_AUTONOMY    # carburant restant (secondes)
 var lamp_factor := 1.0            # 0..1 : intensité de la lampe selon le carburant
 var torches: Array[Vector2i] = [] # torches posées (sécurisent un chemin)
 
+var hp := MAX_HP
+var store_dirt := 0               # stockage de la base (butin déposé)
+var store_rock := 0
+var store_wood := 0
+var store_lithium := 0
+var base_pos := Vector2.ZERO      # point de dépôt (surface, départ)
+var cache_active := false         # une cache de butin attend d'être récupérée
+var cache_pos := Vector2.ZERO
+var cache := {"dirt": 0, "rock": 0, "wood": 0, "lithium": 0}
+
 var flashes := []   # éclats de creusage : {cell:Vector2i, t:float}
 
 var camera: Camera2D
@@ -84,6 +102,7 @@ func _ready() -> void:
 	randomize()
 	_generate_world()
 	_spawn_player()
+	base_pos = pos
 	_make_camera()
 	_make_hud()
 
@@ -173,7 +192,12 @@ func _make_hud() -> void:
 	_update_hud()
 
 func _update_hud() -> void:
-	hud.text = "Lithium: %d   Bois: %d   Terre: %d   Roche: %d\nLampe: %d%%    Torches: %d\n[A/D] bouger  [Espace] sauter  [Clic] creuser  [R] recharger lampe (lithium)  [T] torche (bois)" % [res_lithium, res_wood, res_dirt, res_rock, int(lamp_fuel / LAMP_AUTONOMY * 100.0), torches.size()]
+	var bagline := "Sac: %d/%d" % [_bag_total(), BAG_CAP]
+	if _bag_total() >= BAG_CAP:
+		bagline += "  (PLEIN)"
+	if cache_active:
+		bagline += "     >> CACHE a recuperer <<"
+	hud.text = "PV: %d/%d    %s\nPortes - Li:%d  Bois:%d  Terre:%d  Roche:%d\nBase   - Li:%d  Bois:%d  Terre:%d  Roche:%d\nLampe: %d%%    Torches: %d\n[A/D] bouger  [Espace] saut  [Clic] creuser  [R] lampe  [T] torche  [E] deposer/recuperer  [Q] retirer (base->sac)  [K] mort (test)" % [int(hp), int(MAX_HP), bagline, res_lithium, res_wood, res_dirt, res_rock, store_lithium, store_wood, store_dirt, store_rock, int(lamp_fuel / LAMP_AUTONOMY * 100.0), torches.size()]
 
 # --- Boucle -----------------------------------------------------------------
 func _physics_process(delta: float) -> void:
@@ -204,6 +228,12 @@ func _input(event: InputEvent) -> void:
 			_refuel()
 		elif event.keycode == KEY_T:
 			_place_torch()
+		elif event.keycode == KEY_E:
+			_interact()
+		elif event.keycode == KEY_Q:
+			_withdraw()
+		elif event.keycode == KEY_K:
+			_damage(MAX_HP)   # mort de test
 
 func _refuel() -> void:
 	if res_lithium > 0 and lamp_fuel < LAMP_AUTONOMY:
@@ -215,6 +245,78 @@ func _place_torch() -> void:
 	if res_wood > 0 and not _is_solid(cell.x, cell.y) and not torches.has(cell):
 		res_wood -= 1
 		torches.append(cell)
+
+func _bag_total() -> int:
+	return res_dirt + res_rock + res_wood + res_lithium
+
+func _damage(amount: float) -> void:
+	hp = maxf(0.0, hp - amount)
+	if hp <= 0.0:
+		_die()
+	_update_hud()
+
+func _die() -> void:
+	# Largue le butin transporté dans une cache (Souls). Une cache précédente est perdue.
+	if _bag_total() > 0:
+		cache_active = true
+		cache_pos = pos
+		cache = {"dirt": res_dirt, "rock": res_rock, "wood": res_wood, "lithium": res_lithium}
+		res_dirt = 0
+		res_rock = 0
+		res_wood = 0
+		res_lithium = 0
+	# Réapparition à la base, PV pleins
+	pos = base_pos
+	vel = Vector2.ZERO
+	hp = MAX_HP
+
+func _interact() -> void:
+	if pos.distance_to(base_pos) <= BASE_RANGE:
+		_deposit()
+	elif cache_active and pos.distance_to(cache_pos) <= CACHE_RANGE:
+		_recover_cache()
+
+func _deposit() -> void:
+	store_dirt += res_dirt
+	store_rock += res_rock
+	store_wood += res_wood
+	store_lithium += res_lithium
+	res_dirt = 0
+	res_rock = 0
+	res_wood = 0
+	res_lithium = 0
+	hp = MAX_HP   # on se soigne à la base
+	_update_hud()
+
+func _withdraw() -> void:
+	# Base → sac (en priorité le carburant), dans la limite de capacité.
+	if pos.distance_to(base_pos) > BASE_RANGE:
+		return
+	var space := BAG_CAP - _bag_total()
+	var n := mini(space, store_lithium)
+	res_lithium += n
+	store_lithium -= n
+	space -= n
+	n = mini(space, store_wood)
+	res_wood += n
+	store_wood -= n
+	space -= n
+	n = mini(space, store_rock)
+	res_rock += n
+	store_rock -= n
+	space -= n
+	n = mini(space, store_dirt)
+	res_dirt += n
+	store_dirt -= n
+	_update_hud()
+
+func _recover_cache() -> void:
+	res_dirt += cache["dirt"]
+	res_rock += cache["rock"]
+	res_wood += cache["wood"]
+	res_lithium += cache["lithium"]
+	cache_active = false
+	_update_hud()
 
 # --- Déplacement + collision contre la grille -------------------------------
 func _move(delta: float) -> void:
@@ -234,9 +336,13 @@ func _move(delta: float) -> void:
 	# Axe X
 	pos.x += vel.x * delta
 	_resolve_axis(true)
-	# Axe Y
+	# Axe Y (+ dégâts de chute)
+	var vy := vel.y
+	var was_floor := on_floor
 	pos.y += vel.y * delta
 	on_floor = _resolve_axis(false)
+	if on_floor and not was_floor and vy > FALL_SAFE:
+		_damage((vy - FALL_SAFE) * FALL_DMG)
 
 func _resolve_axis(is_x: bool) -> bool:
 	var landed := false
@@ -300,17 +406,21 @@ func _handle_dig(delta: float) -> void:
 func _break_tile(tx: int, ty: int) -> void:
 	var t := _tile(tx, ty)
 	grid[ty * GRID_W + tx] = EMPTY
+	flashes.append({"cell": Vector2i(tx, ty), "t": 0.18})
+	if t == WALL:
+		_update_hud()
+		return   # béton : gravats, rien à ramasser
+	if _bag_total() >= BAG_CAP:
+		_update_hud()
+		return   # sac plein : la ressource est perdue
 	if t == ROCK:
 		res_rock += 1
 	elif t == WOOD:
 		res_wood += 1
 	elif t == LITHIUM:
 		res_lithium += 1
-	elif t == WALL:
-		pass   # béton : gravats, aucune ressource
 	else:
 		res_dirt += 1
-	flashes.append({"cell": Vector2i(tx, ty), "t": 0.18})
 	_update_hud()
 
 func _update_flashes(delta: float) -> void:
@@ -471,6 +581,12 @@ func _draw() -> void:
 		var tc := Vector2(c.x * TILE + TILE * 0.5, c.y * TILE + TILE * 0.5)
 		draw_circle(tc, TORCH_CORE * TILE, Color(1.0, 0.7, 0.3, 0.12))
 		draw_rect(Rect2(tc + Vector2(-2, -5), Vector2(4, 10)), Color(1.0, 0.75, 0.35))
+	# Base (dépôt, à la surface) et cache de butin (à la mort)
+	draw_circle(base_pos, BASE_RANGE, Color(0.3, 0.9, 0.4, 0.08))
+	draw_rect(Rect2(base_pos + Vector2(-9, -3), Vector2(18, 6)), Color(0.3, 0.85, 0.4))
+	if cache_active:
+		draw_circle(cache_pos, CACHE_RANGE, Color(0.95, 0.75, 0.25, 0.16))
+		draw_rect(Rect2(cache_pos + Vector2(-4, -4), Vector2(8, 8)), Color(0.95, 0.8, 0.3))
 	# Halo central + héros (le héros porte la lumière ; le halo faiblit avec le carburant)
 	draw_circle(pos, LAMP_AMBIENT_CORE * TILE, Color(c_lamp.r, c_lamp.g, c_lamp.b, 0.10 * lamp_factor))
 	draw_rect(Rect2(pos - half, half * 2.0), Color(0.95, 0.85, 0.5))
