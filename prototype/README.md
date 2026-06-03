@@ -26,6 +26,7 @@ godot --editor --path prototype
 - **R** : recharger la lampe (lithium) · **T** : poser une torche (bois)
 - **E** : déposer à la base (si proche) / récupérer une cache (si proche)
 - **Q** : retirer de la base vers le sac (si proche — priorité au carburant)
+- **1 / 2 / 3** (près de la base) : construire **Production** / **Atelier** / **améliorer l'outil**
 - **K** : mourir (test — largue le butin dans une cache)
 
 ## État
@@ -45,6 +46,10 @@ godot --editor --path prototype
   est perdu) ; on **dépose** à la **base** (zone verte au point de départ, `E`) pour vider le sac
   et se soigner ; **PV + dégâts de chute** ; à la **mort**, le butin transporté tombe dans une
   **cache récupérable** (`E`) sur place (façon Souls), et on **réapparaît à la base**. ✅
+- **Jalon 3 — base, PNJ & craft** : près de la base, **construire** (avec le stockage) une
+  **Production** (`1`) où un **PNJ génère du lithium en passif** (même quand on explore) et un
+  **Atelier** (`2`) ; **améliorer l'outil de creusage** (`3`, paliers **Pierre → Fer → Acier** =
+  creusage plus rapide). La boucle *expédition → dépôt → développement → repartir* est bouclée. ✅
 - Tout est piloté par `scripts/Game.gd` ; les **valeurs réglables** (vitesse de creusage,
   gravité, saut, portée, **rayon/portée de lumière**…) sont en haut du script.
 

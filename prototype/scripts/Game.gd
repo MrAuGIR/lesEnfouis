@@ -53,6 +53,14 @@ const FALL_DMG := 0.25           # dégâts par unité de vitesse au-delà du se
 const BASE_RANGE := 2.6 * TILE   # portée de dépôt à la base
 const CACHE_RANGE := 2.0 * TILE  # portée de récupération d'une cache
 
+# --- Base : pièces, PNJ, craft (Jalon 3) ------------------------------------
+const COST_PROD := {"rock": 12, "wood": 8}        # coût de la salle de production
+const COST_WORKSHOP := {"rock": 15, "wood": 6}    # coût de l'atelier
+const PROD_INTERVAL := 12.0      # s entre deux unités produites par le PNJ
+const DIG_TIERS := [1.0, 0.65, 0.45]              # mult. de temps (Pierre→Fer→Acier)
+const TIER_NAMES := ["Pierre", "Fer", "Acier"]
+const UPGRADE_COST := [{}, {"rock": 15, "lithium": 8}, {"rock": 25, "lithium": 16}]
+
 # Types de tuile
 const EMPTY := 0
 const DIRT := 1
@@ -83,19 +91,29 @@ var lamp_factor := 1.0            # 0..1 : intensité de la lampe selon le carbu
 var torches: Array[Vector2i] = [] # torches posées (sécurisent un chemin)
 
 var hp := MAX_HP
-var store_dirt := 0               # stockage de la base (butin déposé)
-var store_rock := 0
-var store_wood := 0
-var store_lithium := 0
+# Stock de départ — CONFORT DE TEST (prototype) : permet de construire/améliorer
+# tout de suite sans grinder. À remettre à 0 avant tout équilibrage sérieux.
+var store_dirt := 40              # stockage de la base (butin déposé)
+var store_rock := 80
+var store_wood := 40
+var store_lithium := 40
 var base_pos := Vector2.ZERO      # point de dépôt (surface, départ)
 var cache_active := false         # une cache de butin attend d'être récupérée
 var cache_pos := Vector2.ZERO
 var cache := {"dirt": 0, "rock": 0, "wood": 0, "lithium": 0}
 
+var has_prod := false             # salle de production construite (+1 PNJ)
+var has_workshop := false         # atelier construit (débloque l'amélioration d'outil)
+var prod_timer := 0.0
+var dig_level := 0                # palier d'outil : 0 Pierre, 1 Fer, 2 Acier
+var dig_time := DIG_TIME          # temps de creusage courant (selon le palier)
+
 var flashes := []   # éclats de creusage : {cell:Vector2i, t:float}
 
 var camera: Camera2D
 var hud: Label
+var msg_label: Label
+var msg_t := 0.0
 
 # --- Init -------------------------------------------------------------------
 func _ready() -> void:
@@ -189,7 +207,16 @@ func _make_hud() -> void:
 	hud.position = Vector2(12, 8)
 	hud.add_theme_color_override("font_color", Color(0.85, 0.9, 0.8))
 	layer.add_child(hud)
+	msg_label = Label.new()
+	msg_label.position = Vector2(12, 118)
+	msg_label.add_theme_color_override("font_color", Color(1.0, 0.92, 0.45))
+	layer.add_child(msg_label)
 	_update_hud()
+
+func _flash_msg(text: String) -> void:
+	msg_t = 2.5
+	if msg_label:
+		msg_label.text = text
 
 func _update_hud() -> void:
 	var bagline := "Sac: %d/%d" % [_bag_total(), BAG_CAP]
@@ -197,7 +224,11 @@ func _update_hud() -> void:
 		bagline += "  (PLEIN)"
 	if cache_active:
 		bagline += "     >> CACHE a recuperer <<"
-	hud.text = "PV: %d/%d    %s\nPortes - Li:%d  Bois:%d  Terre:%d  Roche:%d\nBase   - Li:%d  Bois:%d  Terre:%d  Roche:%d\nLampe: %d%%    Torches: %d\n[A/D] bouger  [Espace] saut  [Clic] creuser  [R] lampe  [T] torche  [E] deposer/recuperer  [Q] retirer (base->sac)  [K] mort (test)" % [int(hp), int(MAX_HP), bagline, res_lithium, res_wood, res_dirt, res_rock, store_lithium, store_wood, store_dirt, store_rock, int(lamp_fuel / LAMP_AUTONOMY * 100.0), torches.size()]
+	var base_line := "Base: Production[%s]  Atelier[%s]  Outil: %s" % ["ON" if has_prod else "-", "ON" if has_workshop else "-", TIER_NAMES[dig_level]]
+	var hint := "[A/D] [Espace] [Clic] creuser  [R] lampe  [T] torche  [E] deposer/recuperer  [Q] retirer  [K] mort"
+	if _near_base():
+		hint = "BASE >  [1] Production (12 roche/8 bois)   [2] Atelier (15 roche/6 bois)   [3] Ameliorer outil   [E] deposer  [Q] retirer"
+	hud.text = "PV: %d/%d    %s\nPortes - Li:%d  Bois:%d  Terre:%d  Roche:%d\nBase   - Li:%d  Bois:%d  Terre:%d  Roche:%d\nLampe: %d%%   Torches: %d   |   %s\n%s" % [int(hp), int(MAX_HP), bagline, res_lithium, res_wood, res_dirt, res_rock, store_lithium, store_wood, store_dirt, store_rock, int(lamp_fuel / LAMP_AUTONOMY * 100.0), torches.size(), base_line, hint]
 
 # --- Boucle -----------------------------------------------------------------
 func _physics_process(delta: float) -> void:
@@ -208,10 +239,24 @@ func _physics_process(delta: float) -> void:
 func _process(delta: float) -> void:
 	_update_aim()
 	_deplete_lamp(delta)
+	_produce(delta)
 	_handle_dig(delta)
 	_update_flashes(delta)
 	_update_hud()
+	if msg_t > 0.0:
+		msg_t -= delta
+		if msg_t <= 0.0 and msg_label:
+			msg_label.text = ""
 	queue_redraw()
+
+func _produce(delta: float) -> void:
+	# Le PNJ de la salle de production génère du lithium en passif (même absent).
+	if not has_prod:
+		return
+	prod_timer += delta
+	if prod_timer >= PROD_INTERVAL:
+		prod_timer -= PROD_INTERVAL
+		store_lithium += 1
 
 func _update_aim() -> void:
 	var v := get_global_mouse_position() - pos
@@ -232,6 +277,12 @@ func _input(event: InputEvent) -> void:
 			_interact()
 		elif event.keycode == KEY_Q:
 			_withdraw()
+		elif event.keycode == KEY_1 or event.physical_keycode == KEY_1:
+			_build_production()
+		elif event.keycode == KEY_2 or event.physical_keycode == KEY_2:
+			_build_workshop()
+		elif event.keycode == KEY_3 or event.physical_keycode == KEY_3:
+			_upgrade_tool()
 		elif event.keycode == KEY_K:
 			_damage(MAX_HP)   # mort de test
 
@@ -318,6 +369,69 @@ func _recover_cache() -> void:
 	cache_active = false
 	_update_hud()
 
+func _near_base() -> bool:
+	return pos.distance_to(base_pos) <= BASE_RANGE
+
+func _can_pay(cost: Dictionary) -> bool:
+	return store_rock >= int(cost.get("rock", 0)) and store_wood >= int(cost.get("wood", 0)) \
+		and store_lithium >= int(cost.get("lithium", 0)) and store_dirt >= int(cost.get("dirt", 0))
+
+func _pay(cost: Dictionary) -> void:
+	store_rock -= int(cost.get("rock", 0))
+	store_wood -= int(cost.get("wood", 0))
+	store_lithium -= int(cost.get("lithium", 0))
+	store_dirt -= int(cost.get("dirt", 0))
+
+func _build_production() -> void:
+	if not _near_base():
+		_flash_msg("Approche-toi de la base (zone verte)")
+		return
+	if has_prod:
+		_flash_msg("Production deja construite")
+		return
+	if not _can_pay(COST_PROD):
+		_flash_msg("Pas assez en base : il faut 12 roche + 8 bois")
+		return
+	_pay(COST_PROD)
+	has_prod = true   # un PNJ y est affecté automatiquement (grey-box)
+	_flash_msg("Production construite ! Un PNJ produit du lithium en passif.")
+	_update_hud()
+
+func _build_workshop() -> void:
+	if not _near_base():
+		_flash_msg("Approche-toi de la base (zone verte)")
+		return
+	if has_workshop:
+		_flash_msg("Atelier deja construit")
+		return
+	if not _can_pay(COST_WORKSHOP):
+		_flash_msg("Pas assez en base : il faut 15 roche + 6 bois")
+		return
+	_pay(COST_WORKSHOP)
+	has_workshop = true
+	_flash_msg("Atelier construit ! Tu peux ameliorer l'outil (touche 3).")
+	_update_hud()
+
+func _upgrade_tool() -> void:
+	if not _near_base():
+		_flash_msg("Approche-toi de la base (zone verte)")
+		return
+	if not has_workshop:
+		_flash_msg("Atelier requis d'abord (touche 2)")
+		return
+	if dig_level >= DIG_TIERS.size() - 1:
+		_flash_msg("Outil deja au maximum (Acier)")
+		return
+	var cost: Dictionary = UPGRADE_COST[dig_level + 1]
+	if not _can_pay(cost):
+		_flash_msg("Pas assez en base : %d roche + %d lithium" % [int(cost.get("rock", 0)), int(cost.get("lithium", 0))])
+		return
+	_pay(cost)
+	dig_level += 1
+	dig_time = DIG_TIME * DIG_TIERS[dig_level]
+	_flash_msg("Outil ameliore : %s (creusage plus rapide)" % TIER_NAMES[dig_level])
+	_update_hud()
+
 # --- Déplacement + collision contre la grille -------------------------------
 func _move(delta: float) -> void:
 	var dir := 0.0
@@ -397,7 +511,7 @@ func _handle_dig(delta: float) -> void:
 		dig_target = cell
 		dig_progress = 0.0
 	dig_progress += delta
-	var need := DIG_TIME * (ROCK_MULT if _is_hard(_tile(tx, ty)) else 1.0)
+	var need := dig_time * (ROCK_MULT if _is_hard(_tile(tx, ty)) else 1.0)
 	if dig_progress >= need:
 		_break_tile(tx, ty)
 		dig_target = Vector2i(-1, -1)
@@ -571,7 +685,7 @@ func _draw() -> void:
 		draw_rect(Rect2(f.cell.x * TILE, f.cell.y * TILE, TILE, TILE), Color(1.0, 0.9, 0.6, a * 0.7))
 	# Cible de creusage + progression
 	if dig_target.x >= 0:
-		var need := DIG_TIME * (ROCK_MULT if _is_hard(_tile(dig_target.x, dig_target.y)) else 1.0)
+		var need := dig_time * (ROCK_MULT if _is_hard(_tile(dig_target.x, dig_target.y)) else 1.0)
 		var p: float = clampf(dig_progress / need, 0.0, 1.0)
 		var rpos := Vector2(dig_target.x * TILE, dig_target.y * TILE)
 		draw_rect(Rect2(rpos, Vector2(TILE, TILE)), Color(1, 1, 1, 0.15 + 0.35 * p))
@@ -584,6 +698,18 @@ func _draw() -> void:
 	# Base (dépôt, à la surface) et cache de butin (à la mort)
 	draw_circle(base_pos, BASE_RANGE, Color(0.3, 0.9, 0.4, 0.08))
 	draw_rect(Rect2(base_pos + Vector2(-9, -3), Vector2(18, 6)), Color(0.3, 0.85, 0.4))
+	# Pièces construites (avec étiquettes)
+	var font := ThemeDB.fallback_font
+	draw_string(font, base_pos + Vector2(-12, -7), "BASE", HORIZONTAL_ALIGNMENT_LEFT, -1, 7, Color(0.6, 1.0, 0.7))
+	if has_prod:
+		var pr := base_pos + Vector2(-3.6 * TILE, -2.0 * TILE)
+		draw_rect(Rect2(pr, Vector2(2.4 * TILE, 2.0 * TILE)), Color(0.25, 0.45, 0.70))
+		draw_rect(Rect2(pr + Vector2(0.9 * TILE, 1.0 * TILE), Vector2(6, 12)), Color(0.95, 0.9, 0.65))  # PNJ
+		draw_string(font, pr + Vector2(1, -2), "PROD", HORIZONTAL_ALIGNMENT_LEFT, -1, 7, Color(0.7, 0.85, 1.0))
+	if has_workshop:
+		var ws := base_pos + Vector2(1.2 * TILE, -2.0 * TILE)
+		draw_rect(Rect2(ws, Vector2(2.4 * TILE, 2.0 * TILE)), Color(0.60, 0.45, 0.25))
+		draw_string(font, ws + Vector2(1, -2), "ATELIER", HORIZONTAL_ALIGNMENT_LEFT, -1, 7, Color(1.0, 0.85, 0.6))
 	if cache_active:
 		draw_circle(cache_pos, CACHE_RANGE, Color(0.95, 0.75, 0.25, 0.16))
 		draw_rect(Rect2(cache_pos + Vector2(-4, -4), Vector2(8, 8)), Color(0.95, 0.8, 0.3))
