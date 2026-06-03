@@ -1,5 +1,9 @@
 # Brief de concept — Le HUD (interface en jeu)
 
+> ✅ **Réponse du designer reçue :** planche [`concept_hud.png`](concept_hud.png) +
+> [retour structuré](retour-concept-hud.md). À surveiller : **rouge sur rouge** (alerte UI vs
+> optique robot / danger). Densité (tout permanent vs contextuel) tranchable au prototype.
+>
 > **À l'attention du / de la designer.** Brief ciblé pour concevoir le **HUD d'exploration**
 > (l'affichage permanent pendant qu'on creuse/explore/combat). Étape **concept** : trouver le
 > **langage d'interface** + la hiérarchie d'information, **pas** les écrans finaux ni les menus.

@@ -13,7 +13,9 @@
 > [héros](../concept-art/concept-hero.png)
 > ([retour](../concept-art/retour-concept-heros.md)) ·
 > [ennemi robot](../concept-art/concept_enemis_robot.png)
-> ([retour](../concept-art/retour-concept-ennemi-robot.md)).
+> ([retour](../concept-art/retour-concept-ennemi-robot.md)) ·
+> [HUD](../concept-art/concept_hud.png)
+> ([retour](../concept-art/retour-concept-hud.md)).
 >
 > 🧑 **Briefs de concept (par élément) :** [Le Héros](../concept-art/brief-concept-heros.md) ·
 > [L'ennemi Robot](../concept-art/brief-concept-ennemi-robot.md) ·
