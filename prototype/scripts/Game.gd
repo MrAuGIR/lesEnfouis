@@ -9,11 +9,11 @@ const GRID_W := 240
 const GRID_H := 240
 const AIR_ROWS := 8         # rangées de ciel/vide en haut
 
-const MOVE_SPEED := 110.0   # px/s
+const MOVE_SPEED := 98.0    # px/s
 const GRAVITY := 900.0
 const JUMP_SPEED := 300.0
 
-const DIG_TIME := 0.40      # s pour creuser 1 bloc de terre (le nerf du game feel)
+const DIG_TIME := 0.28      # s pour creuser 1 bloc de terre (le nerf du game feel)
 const ROCK_MULT := 2.5      # la roche est plus lente
 const REACH := 3.5 * TILE   # portée de creusage autour du héros
 
