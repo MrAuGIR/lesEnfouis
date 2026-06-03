@@ -27,11 +27,15 @@ godot --editor --path prototype
 
 ## État
 
-- **Jalon 0 — mouvement & creusage** : monde de tuiles généré (terre/roche + cavités),
-  déplacement avec gravité/collision, creusage à la souris avec progression + éclat de cassage,
-  compteur de ressources (terre/roche).
+- **Jalon 0 — mouvement & creusage** : déplacement avec gravité/collision, creusage à la souris
+  avec progression + éclat de cassage, compteur de ressources (terre/roche). ✅
+- **Jalon 1 — génération & lumière** : monde généré par **bruit** (relief de surface, cavités,
+  filons de roche plus fréquents en profondeur) ; **mécanique de lumière** : obscurité +
+  **lampe frontale (casque)** = **faisceau dirigé vers la souris** + halo doux autour du corps,
+  et lumière du jour qui décline avec la profondeur. ✅
+  *(Prochaine sous-étape : carburant de la lampe + torches posables.)*
 - Tout est piloté par `scripts/Game.gd` ; les **valeurs réglables** (vitesse de creusage,
-  gravité, saut, portée…) sont en haut du script.
+  gravité, saut, portée, **rayon/portée de lumière**…) sont en haut du script.
 
-> Prochains jalons (génération + lumière, inventaire/extraction, base/PNJ) : voir
+> Prochains jalons (inventaire/extraction + mort, base/PNJ + craft) : voir
 > [`../docs/PROTOTYPE.md`](../docs/PROTOTYPE.md).

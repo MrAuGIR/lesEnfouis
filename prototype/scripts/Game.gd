@@ -17,6 +17,20 @@ const DIG_TIME := 0.28      # s pour creuser 1 bloc de terre (le nerf du game fe
 const ROCK_MULT := 2.5      # la roche est plus lente
 const REACH := 3.5 * TILE   # portée de creusage autour du héros
 
+# --- Lumière (Jalon 1) ------------------------------------------------------
+# Lampe frontale (casque) : un faisceau dirigé vers la souris + un halo doux
+# autour du corps (on n'est jamais aveugle à ses pieds).
+const LAMP_AMBIENT_CORE := 1.2   # tuiles : plein autour du corps
+const LAMP_AMBIENT_RADIUS := 3.2 # tuiles : portée du halo de corps
+const LAMP_AMBIENT_MAX := 0.75   # le halo de corps est un peu moins fort que le faisceau
+const LAMP_BEAM_CORE := 2.5      # tuiles : plein au départ du faisceau
+const LAMP_BEAM_RANGE := 9.5     # tuiles : portée du faisceau
+const LAMP_COS_INNER := 0.94     # cos(~20°) : cœur du faisceau
+const LAMP_COS_OUTER := 0.55     # cos(~57°) : bord du faisceau
+const SKY_FADE := 14.0      # profondeur sur laquelle la lumière du jour décline
+const SKY_STRENGTH := 1.0   # intensité de la lumière du jour en surface
+const AMBIENT_MIN := 0.05   # luminosité minimale (le noir n'est jamais total)
+
 # Types de tuile
 const EMPTY := 0
 const DIRT := 1
@@ -24,10 +38,12 @@ const ROCK := 2
 
 # --- État -------------------------------------------------------------------
 var grid := PackedByteArray()
+var surface := PackedInt32Array() # hauteur du terrain par colonne (lumière du ciel)
 var pos := Vector2.ZERO           # centre du héros (monde)
 var vel := Vector2.ZERO
 var half := Vector2(6, 14)        # demi-taille du héros (~12x28 px ≈ 1,75 tuile)
 var on_floor := false
+var aim := Vector2.RIGHT          # direction du faisceau de lampe (vers la souris)
 
 var dig_target := Vector2i(-1, -1)
 var dig_progress := 0.0
@@ -50,20 +66,44 @@ func _ready() -> void:
 
 func _generate_world() -> void:
 	grid.resize(GRID_W * GRID_H)
-	for y in GRID_H:
-		for x in GRID_W:
+	surface.resize(GRID_W)
+
+	var h_noise := FastNoiseLite.new()      # relief de la surface
+	h_noise.noise_type = FastNoiseLite.TYPE_PERLIN
+	h_noise.frequency = 0.03
+	h_noise.seed = randi()
+
+	var cave_noise := FastNoiseLite.new()   # cavités
+	cave_noise.noise_type = FastNoiseLite.TYPE_PERLIN
+	cave_noise.frequency = 0.08
+	cave_noise.seed = randi()
+
+	var rock_noise := FastNoiseLite.new()   # filons de roche
+	rock_noise.noise_type = FastNoiseLite.TYPE_PERLIN
+	rock_noise.frequency = 0.11
+	rock_noise.seed = randi()
+
+	for x in GRID_W:
+		var top := AIR_ROWS + int((h_noise.get_noise_1d(float(x)) * 0.5 + 0.5) * 10.0)
+		surface[x] = top
+		for y in GRID_H:
 			var t := EMPTY
-			if y >= AIR_ROWS:
+			if y >= top:
 				t = DIRT
-				var r := randf()
-				if r < 0.12:
-					t = ROCK
-				elif r < 0.18:
-					t = EMPTY   # petites poches/cavités pour donner envie de creuser
+				var depth := float(y - top)
+				# Cavités (pas trop près de la surface) → donnent envie d'explorer
+				if depth > 3.0 and cave_noise.get_noise_2d(float(x), float(y)) > 0.33:
+					t = EMPTY
+				else:
+					# Roche : de plus en plus fréquente avec la profondeur
+					var thresh := 0.5 - clampf(depth / 120.0, 0.0, 0.3)
+					if rock_noise.get_noise_2d(float(x), float(y)) > thresh:
+						t = ROCK
 			grid[y * GRID_W + x] = t
 
 func _spawn_player() -> void:
-	pos = Vector2(GRID_W * 0.5 * TILE, (AIR_ROWS - 1) * TILE)
+	var cx := int(GRID_W * 0.5)
+	pos = Vector2(cx * TILE + TILE * 0.5, (surface[cx] - 1) * TILE)
 
 func _make_camera() -> void:
 	camera = Camera2D.new()
@@ -92,9 +132,15 @@ func _physics_process(delta: float) -> void:
 		camera.global_position = pos
 
 func _process(delta: float) -> void:
+	_update_aim()
 	_handle_dig(delta)
 	_update_flashes(delta)
 	queue_redraw()
+
+func _update_aim() -> void:
+	var v := get_global_mouse_position() - pos
+	if v.length() > 1.0:
+		aim = v.normalized()
 
 # --- Déplacement + collision contre la grille -------------------------------
 func _move(delta: float) -> void:
@@ -215,27 +261,86 @@ func _in_reach(tx: int, ty: int) -> bool:
 	var center := Vector2(tx * TILE + TILE * 0.5, ty * TILE + TILE * 0.5)
 	return pos.distance_to(center) <= REACH
 
+# --- Lumière ----------------------------------------------------------------
+func _sky_light(tx: int, ty: int) -> float:
+	var s := surface[clampi(tx, 0, GRID_W - 1)]
+	if ty < s:
+		return 1.0
+	return 1.0 - clampf(float(ty - s) / SKY_FADE, 0.0, 1.0)
+
+func _lamp_light(tx: int, ty: int) -> float:
+	var hc := Vector2(pos.x / TILE, pos.y / TILE)
+	var v := Vector2(tx + 0.5, ty + 0.5) - hc
+	var d := v.length()
+	# Halo doux autour du corps (toutes directions)
+	var amb := 1.0 - clampf((d - LAMP_AMBIENT_CORE) / (LAMP_AMBIENT_RADIUS - LAMP_AMBIENT_CORE), 0.0, 1.0)
+	amb = amb * amb * LAMP_AMBIENT_MAX
+	# Faisceau dirigé vers la souris
+	var beam := 0.0
+	if d > 0.001:
+		var dir := v / d
+		var ang := clampf((dir.dot(aim) - LAMP_COS_OUTER) / (LAMP_COS_INNER - LAMP_COS_OUTER), 0.0, 1.0)
+		var rad := 1.0 - clampf((d - LAMP_BEAM_CORE) / (LAMP_BEAM_RANGE - LAMP_BEAM_CORE), 0.0, 1.0)
+		beam = ang * rad * rad
+	var lit := maxf(amb, beam)
+	# Occlusion : la lumière s'arrête au premier bloc plein (ligne de vue)
+	if lit > 0.02 and not _los_clear(tx, ty):
+		return 0.0
+	return clampf(lit, 0.0, 1.0)
+
+func _los_clear(tx: int, ty: int) -> bool:
+	# Vrai si rien de plein ne bloque entre le héros et la tuile (cible exclue :
+	# le mur qu'on regarde est éclairé sur sa face, mais pas ce qu'il y a derrière).
+	var a := Vector2(pos.x / TILE, pos.y / TILE)
+	var b := Vector2(tx + 0.5, ty + 0.5)
+	var steps := int(ceil(a.distance_to(b) * 2.0))
+	if steps <= 1:
+		return true
+	for i in range(1, steps):
+		var p := a.lerp(b, float(i) / float(steps))
+		var cx := int(floor(p.x))
+		var cy := int(floor(p.y))
+		if cx == tx and cy == ty:
+			continue
+		if _is_solid(cx, cy):
+			return false
+	return true
+
+func _brightness(tx: int, ty: int) -> float:
+	return clampf(maxf(_sky_light(tx, ty) * SKY_STRENGTH, _lamp_light(tx, ty)), AMBIENT_MIN, 1.0)
+
 # --- Rendu (grey-box) -------------------------------------------------------
 func _draw() -> void:
 	var c_dirt := Color(0.42, 0.30, 0.20)
 	var c_rock := Color(0.40, 0.42, 0.46)
+	var c_lamp := Color(1.0, 0.85, 0.55)
 	var ptx := int(pos.x / TILE)
 	var pty := int(pos.y / TILE)
 	var rx := 34
 	var ry := 22
-	# Fond
+	# Fond sombre
 	var bg_pos := Vector2((ptx - rx) * TILE, (pty - ry) * TILE)
 	var bg_size := Vector2((rx * 2) * TILE, (ry * 2) * TILE)
-	draw_rect(Rect2(bg_pos, bg_size), Color(0.06, 0.06, 0.08))
-	# Tuiles visibles
+	draw_rect(Rect2(bg_pos, bg_size), Color(0.04, 0.04, 0.06))
+	# Tuiles visibles, éclairées
 	for ty in range(pty - ry, pty + ry):
 		for tx in range(ptx - rx, ptx + rx):
+			var rect := Rect2(tx * TILE, ty * TILE, TILE, TILE)
 			var t := _tile(tx, ty)
 			if t == EMPTY:
+				# Halo de la lampe / lumière du jour visibles dans le vide
+				var lamp := _lamp_light(tx, ty)
+				if lamp > 0.02:
+					draw_rect(rect, Color(c_lamp.r, c_lamp.g, c_lamp.b, lamp * 0.22))
+				elif ty < surface[clampi(tx, 0, GRID_W - 1)] + 2:
+					var sky := _sky_light(tx, ty)
+					if sky > 0.02:
+						draw_rect(rect, Color(0.5, 0.6, 0.7, sky * 0.10))
 				continue
+			var b := _brightness(tx, ty)
 			var col := c_dirt if t == DIRT else c_rock
-			draw_rect(Rect2(tx * TILE, ty * TILE, TILE, TILE), col)
-			draw_rect(Rect2(tx * TILE, ty * TILE, TILE, TILE), Color(0, 0, 0, 0.15), false, 1.0)
+			draw_rect(rect, Color(col.r * b, col.g * b, col.b * b))
+			draw_rect(rect, Color(0, 0, 0, 0.15 * b), false, 1.0)
 	# Éclats de creusage (feedback de cassage)
 	for f in flashes:
 		var a: float = clampf(f.t / 0.18, 0.0, 1.0)
@@ -247,6 +352,7 @@ func _draw() -> void:
 		var rpos := Vector2(dig_target.x * TILE, dig_target.y * TILE)
 		draw_rect(Rect2(rpos, Vector2(TILE, TILE)), Color(1, 1, 1, 0.15 + 0.35 * p))
 		draw_rect(Rect2(rpos, Vector2(TILE, TILE)), Color(1, 1, 1, 0.7), false, 1.0)
-	# Héros
-	draw_rect(Rect2(pos - half, half * 2.0), Color(0.92, 0.80, 0.42))
+	# Halo central + héros (le héros porte la lumière)
+	draw_circle(pos, LAMP_AMBIENT_CORE * TILE, Color(c_lamp.r, c_lamp.g, c_lamp.b, 0.10))
+	draw_rect(Rect2(pos - half, half * 2.0), Color(0.95, 0.85, 0.5))
 	draw_rect(Rect2(pos - half, half * 2.0), Color(0.2, 0.15, 0.05, 0.8), false, 1.0)
