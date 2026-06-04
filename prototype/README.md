@@ -23,7 +23,8 @@ godot --editor --path prototype
 
 - **ZQSD** (ou WASD) ou **← / →** : se déplacer · **Espace / Z / ↑** : sauter
 - **Clic gauche** : creuser la tuile visée (dans le rayon autour du héros)
-- **Clic droit** : **frapper** (mêlée) dans la direction de la souris — contre les robots
+- **Clic droit** : **attaquer** avec l'arme courante (mêlée ou tir) vers la souris
+- **Molette** (ou **X**) : **changer d'arme** (mêlée ↔ arme à feu) — le tir consomme des munitions
 - **I** : ouvrir/fermer l'**inventaire** (sac en grille de slots + stockage de base) —
   **clic** = prendre/poser/fusionner une pile, **Maj+clic** = transfert rapide sac ↔ base
 - **R** : recharger la lampe (lithium) · **T** : poser une torche (bois)
@@ -68,7 +69,11 @@ godot --editor --path prototype
   **poursuivent** le héros à vue (avec ligne de vue) et infligent des **dégâts au contact**.
   Le héros **frappe au clic droit** (arc court vers la souris, cooldown) ; ~2 coups détruisent
   un robot, qui **lâche du lithium** (batteries). Ils sont **peu visibles dans le noir** →
-  la lampe sert aussi à les repérer. *(Arme à feu + munitions = sous-étape suivante.)* 🟡
+  la lampe sert aussi à les repérer. ✅
+- **Jalon 5b — arme à feu & munitions** : 2e arme (**molette/X** pour changer), **tir hitscan**
+  visé à la souris (traceur, s'arrête au mur ou au robot touché, ~2 balles), **munitions
+  limitées** consommées par tir et **lâchées en partie par les robots** (boucle loot, façon
+  Metro où chaque balle compte). 🟡
 - Tout est piloté par `scripts/Game.gd` ; les **valeurs réglables** (vitesse de creusage,
   gravité, saut, portée, **rayon/portée de lumière**…) sont en haut du script.
 

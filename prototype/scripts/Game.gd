@@ -85,6 +85,14 @@ const MELEE_DMG := 34.0          # ~2 coups pour tuer un robot
 const MELEE_CD := 0.42           # s entre deux coups du héros
 const MELEE_VIS := 0.16          # s d'affichage de l'arc de coup
 const MELEE_KNOCK := 120.0       # recul infligé au robot touché
+# Arme à feu (J5b) : tir hitscan, munitions rares
+const GUN_DMG := 40.0            # ~2 balles pour détruire un robot
+const GUN_RANGE := 14.0 * TILE   # portée du tir
+const GUN_CD := 0.5              # s entre deux tirs
+const GUN_TRACER_T := 0.08       # s d'affichage du traceur
+const START_AMMO := 24           # munitions de départ — CONFORT DE TEST (à remettre à 0/qqs)
+const ENEMY_AMMO_DROP := 2       # munitions lâchées par un robot (avec une probabilité)
+const ENEMY_AMMO_CHANCE := 0.6   # probabilité qu'un robot lâche des munitions
 
 # --- Objectif (Jalon 4) -----------------------------------------------------
 const HARD_MULT := 4.5            # creusage de la roche dense (très lent)
@@ -154,6 +162,12 @@ var won := false                  # objectif accompli
 var enemies := []
 var atk_cd := 0.0                 # cooldown du coup du héros
 var atk_t := 0.0                  # reste d'affichage de l'arc de coup
+var weapon := 0                   # arme courante : 0 = mêlée, 1 = arme à feu
+var ammo := START_AMMO            # munitions (réserve dédiée, pas dans le sac)
+var gun_cd := 0.0                 # cooldown de tir
+var tracer_t := 0.0               # reste d'affichage du traceur de tir
+var tracer_a := Vector2.ZERO      # extrémités du traceur (départ → impact)
+var tracer_b := Vector2.ZERO
 
 var flashes := []   # éclats de creusage : {cell:Vector2i, t:float}
 
@@ -299,10 +313,11 @@ func _update_hud() -> void:
 		obj = "*** GAGNE ! Artefact rapporte a la base ***"
 	elif has_artefact:
 		obj = ">> Artefact EN MAIN -- rentre le deposer a la base ! <<"
-	var hint := "[ZQSD/Fleches] bouger/grimper  [Espace] saut  [Clic G] creuser  [Clic D] frapper  [I] inventaire  [F] echelle  [R] lampe  [T] torche  [E] deposer  [Q] retirer  [K] mort"
+	var weap := "Arme: melee" if weapon == 0 else "Arme: feu (%d mun.)" % ammo
+	var hint := "[ZQSD/Fleches] bouger/grimper  [Espace] saut  [Clic G] creuser  [Clic D] attaquer  [Molette/X] arme  [I] inventaire  [F] echelle  [R] lampe  [T] torche  [E] deposer  [Q] retirer  [K] mort"
 	if _near_base():
 		hint = "BASE >  [1] Production (12 roche/8 bois)   [2] Atelier (15 roche/6 bois)   [3] Ameliorer outil   [I] inventaire  [E] deposer  [Q] retirer"
-	hud.text = "%s\nPV: %d/%d    %s\nSac    - Li:%d  Bois:%d  Terre:%d  Roche:%d\nBase   - Li:%d  Bois:%d  Terre:%d  Roche:%d\nLampe: %d%%   Torches: %d   |   %s\n%s" % [obj, int(hp), int(MAX_HP), bagline, _bag_count(LITHIUM), _bag_count(WOOD), _bag_count(DIRT), _bag_count(ROCK), store_lithium, store_wood, store_dirt, store_rock, int(lamp_fuel / LAMP_AUTONOMY * 100.0), torches.size(), base_line, hint]
+	hud.text = "%s\nPV: %d/%d    %s\nSac    - Li:%d  Bois:%d  Terre:%d  Roche:%d\nBase   - Li:%d  Bois:%d  Terre:%d  Roche:%d\nLampe: %d%%   Torches: %d   %s   |   %s\n%s" % [obj, int(hp), int(MAX_HP), bagline, _bag_count(LITHIUM), _bag_count(WOOD), _bag_count(DIRT), _bag_count(ROCK), store_lithium, store_wood, store_dirt, store_rock, int(lamp_fuel / LAMP_AUTONOMY * 100.0), torches.size(), weap, base_line, hint]
 
 # --- Boucle -----------------------------------------------------------------
 func _physics_process(delta: float) -> void:
@@ -366,8 +381,13 @@ func _input(event: InputEvent) -> void:
 			_upgrade_tool()
 		elif event.keycode == KEY_I or event.physical_keycode == KEY_I:
 			_toggle_inventory()
+		elif event.keycode == KEY_X or event.physical_keycode == KEY_X:
+			_swap_weapon()
 		elif event.keycode == KEY_K:
 			_damage(MAX_HP)   # mort de test
+	elif event is InputEventMouseButton and event.pressed:
+		if event.button_index == MOUSE_BUTTON_WHEEL_UP or event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+			_swap_weapon()
 
 func _refuel() -> void:
 	if _bag_count(LITHIUM) > 0 and lamp_fuel < LAMP_AUTONOMY:
@@ -748,10 +768,23 @@ func _aabb_overlap(p1: Vector2, h1: Vector2, p2: Vector2, h2: Vector2) -> bool:
 func _update_combat(delta: float) -> void:
 	atk_cd = maxf(0.0, atk_cd - delta)
 	atk_t = maxf(0.0, atk_t - delta)
+	gun_cd = maxf(0.0, gun_cd - delta)
+	tracer_t = maxf(0.0, tracer_t - delta)
 	if inv_open:
 		return
-	if Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT) and atk_cd <= 0.0:
-		_melee_attack()
+	if Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT):
+		if weapon == 0 and atk_cd <= 0.0:
+			_melee_attack()
+		elif weapon == 1 and gun_cd <= 0.0:
+			_gun_fire()
+
+func _swap_weapon() -> void:
+	weapon = 1 - weapon
+	if weapon == 1:
+		_flash_msg("Arme : arme a feu (%d munitions)" % ammo)
+	else:
+		_flash_msg("Arme : melee")
+	_update_hud()
 
 func _melee_attack() -> void:
 	atk_cd = MELEE_CD
@@ -765,6 +798,42 @@ func _melee_attack() -> void:
 			e["vel"] += aim * MELEE_KNOCK
 	_cull_enemies()
 
+func _gun_fire() -> void:
+	if ammo <= 0:
+		gun_cd = 0.25
+		_flash_msg("Plus de munitions ! (passe en melee : molette/X)")
+		return
+	ammo -= 1
+	gun_cd = GUN_CD
+	# Distance jusqu'au premier mur sur le rayon (occlusion).
+	var wall_d := GUN_RANGE
+	var steps := int(GUN_RANGE / (TILE * 0.5))
+	for i in range(1, steps + 1):
+		var d := float(i) * TILE * 0.5
+		var p := pos + aim * d
+		if _is_solid(int(p.x / TILE), int(p.y / TILE)):
+			wall_d = d
+			break
+	# Robot le plus proche traversé par le rayon, avant le mur.
+	var target = null
+	var target_d := wall_d
+	for e in enemies:
+		var to_e: Vector2 = e["pos"] - pos
+		var proj := to_e.dot(aim)
+		if proj <= 0.0 or proj > target_d:
+			continue
+		var perp := (to_e - aim * proj).length()
+		if perp <= ENEMY_HALF.y + 3.0:
+			target = e
+			target_d = proj
+	tracer_a = pos
+	tracer_b = pos + aim * target_d
+	tracer_t = GUN_TRACER_T
+	if target != null:
+		target["hp"] = float(target["hp"]) - GUN_DMG
+		target["flash"] = MELEE_VIS
+		_cull_enemies()
+
 func _cull_enemies() -> void:
 	var alive := []
 	for e in enemies:
@@ -773,7 +842,14 @@ func _cull_enemies() -> void:
 		else:
 			_bag_add(LITHIUM, ENEMY_LOOT)
 			flashes.append({"cell": Vector2i(int(e["pos"].x / TILE), int(e["pos"].y / TILE)), "t": 0.3})
-			_flash_msg("Robot detruit (+%d lithium)" % ENEMY_LOOT)
+			var got_ammo := 0
+			if randf() < ENEMY_AMMO_CHANCE:
+				got_ammo = ENEMY_AMMO_DROP
+				ammo += got_ammo
+			if got_ammo > 0:
+				_flash_msg("Robot detruit (+%d lithium, +%d munitions)" % [ENEMY_LOOT, got_ammo])
+			else:
+				_flash_msg("Robot detruit (+%d lithium)" % ENEMY_LOOT)
 	enemies = alive
 
 # --- Déplacement + collision contre la grille -------------------------------
@@ -1293,7 +1369,12 @@ func _draw() -> void:
 	draw_circle(pos, LAMP_AMBIENT_CORE * TILE, Color(c_lamp.r, c_lamp.g, c_lamp.b, 0.10 * lamp_factor))
 	draw_rect(Rect2(pos - half, half * 2.0), Color(0.95, 0.85, 0.5))
 	draw_rect(Rect2(pos - half, half * 2.0), Color(0.2, 0.15, 0.05, 0.8), false, 1.0)
-	# Arc de coup (feedback du clic droit)
+	# Arc de coup (feedback du clic droit, mêlée)
 	if atk_t > 0.0:
 		var a: float = clampf(atk_t / MELEE_VIS, 0.0, 1.0)
 		draw_circle(pos + aim * MELEE_RANGE * 0.55, MELEE_RANGE * 0.5, Color(1.0, 1.0, 1.0, 0.20 * a))
+	# Traceur de tir (arme à feu)
+	if tracer_t > 0.0:
+		var ta: float = clampf(tracer_t / GUN_TRACER_T, 0.0, 1.0)
+		draw_line(tracer_a, tracer_b, Color(1.0, 0.9, 0.4, 0.5 + 0.4 * ta), 1.5)
+		draw_circle(tracer_b, 2.5, Color(1.0, 0.85, 0.4, ta))
