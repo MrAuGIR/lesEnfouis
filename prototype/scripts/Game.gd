@@ -48,7 +48,13 @@ const TORCH_RADIUS := 5.5        # tuiles : portée d'une torche posée
 const TORCH_CORE := 1.5          # tuiles : pleine lumière au pied de la torche
 
 # --- Sac, base, mort (Jalon 2) ----------------------------------------------
-const BAG_CAP := 25              # capacité du sac (nb d'objets transportés)
+# Inventaire façon Minecraft : grille de slots, objets en piles (stacks).
+const BAG_SLOTS := 8             # nombre de cases du sac (la "capacité" = nb de slots)
+const STACK_MAX := 64            # taille d'une pile (objets identiques empilés)
+# UI de l'inventaire (calque écran)
+const SLOT := 28                 # px : taille d'une case
+const SLOT_PAD := 5              # px : espace entre cases
+const INV_COLS := 4              # colonnes de la grille du sac
 const MAX_HP := 100.0
 const FALL_SAFE := 380.0         # vitesse de chute sans dégât (px/s)
 const FALL_DMG := 0.25           # dégâts par unité de vitesse au-delà du seuil
@@ -80,6 +86,9 @@ const HARDROCK := 6 # roche dense (barrière) : nécessite l'outil Fer (niveau >
 const ARTEFACT := 7 # objectif à rapporter à la base
 const LADDER := 8   # échelle (construite en bois) : on grimpe dessus
 
+# Ressources transportables (ordre d'affichage dans l'inventaire / le stockage)
+const RES_TYPES := [DIRT, ROCK, WOOD, LITHIUM]
+
 # --- État -------------------------------------------------------------------
 var grid := PackedByteArray()
 var surface := PackedInt32Array() # hauteur du terrain par colonne (lumière du ciel)
@@ -92,10 +101,10 @@ var aim := Vector2.RIGHT          # direction du faisceau de lampe (vers la sour
 var dig_target := Vector2i(-1, -1)
 var dig_progress := 0.0
 
-var res_dirt := 0
-var res_rock := 0
-var res_wood := 0
-var res_lithium := 0
+# Sac = grille de slots ; chaque slot est {} (vide) ou {"type":int,"count":int}.
+var bag := []
+var held := {}            # pile "tenue" au curseur dans l'inventaire (clic prendre/poser)
+var inv_open := false     # l'écran d'inventaire est-il ouvert ?
 
 var lamp_fuel := LAMP_AUTONOMY    # carburant restant (secondes)
 var lamp_factor := 1.0            # 0..1 : intensité de la lampe selon le carburant
@@ -129,10 +138,12 @@ var camera: Camera2D
 var hud: Label
 var msg_label: Label
 var msg_t := 0.0
+var inv_ui: Control
 
 # --- Init -------------------------------------------------------------------
 func _ready() -> void:
 	randomize()
+	_init_bag()
 	_generate_world()
 	_spawn_player()
 	base_pos = pos
@@ -238,6 +249,13 @@ func _make_hud() -> void:
 	msg_label.position = Vector2(12, 142)
 	msg_label.add_theme_color_override("font_color", Color(1.0, 0.92, 0.45))
 	layer.add_child(msg_label)
+	# Calque d'inventaire (plein écran, masqué par défaut)
+	inv_ui = preload("res://scripts/InvUI.gd").new()
+	inv_ui.game = self
+	inv_ui.set_anchors_preset(Control.PRESET_FULL_RECT)
+	inv_ui.mouse_filter = Control.MOUSE_FILTER_STOP
+	inv_ui.visible = false
+	layer.add_child(inv_ui)
 	_update_hud()
 
 func _flash_msg(text: String) -> void:
@@ -246,8 +264,8 @@ func _flash_msg(text: String) -> void:
 		msg_label.text = text
 
 func _update_hud() -> void:
-	var bagline := "Sac: %d/%d" % [_bag_total(), BAG_CAP]
-	if _bag_total() >= BAG_CAP:
+	var bagline := "Sac: %d/%d slots" % [_bag_slots_used(), BAG_SLOTS]
+	if _bag_slots_used() >= BAG_SLOTS:
 		bagline += "  (PLEIN)"
 	if cache_active:
 		bagline += "     >> CACHE a recuperer <<"
@@ -257,10 +275,10 @@ func _update_hud() -> void:
 		obj = "*** GAGNE ! Artefact rapporte a la base ***"
 	elif has_artefact:
 		obj = ">> Artefact EN MAIN -- rentre le deposer a la base ! <<"
-	var hint := "[ZQSD/Fleches] bouger/grimper  [Espace] saut  [Clic] creuser  [F] echelle  [R] lampe  [T] torche  [E] deposer  [Q] retirer  [K] mort"
+	var hint := "[ZQSD/Fleches] bouger/grimper  [Espace] saut  [Clic] creuser  [I] inventaire  [F] echelle  [R] lampe  [T] torche  [E] deposer  [Q] retirer  [K] mort"
 	if _near_base():
-		hint = "BASE >  [1] Production (12 roche/8 bois)   [2] Atelier (15 roche/6 bois)   [3] Ameliorer outil   [E] deposer  [Q] retirer"
-	hud.text = "%s\nPV: %d/%d    %s\nPortes - Li:%d  Bois:%d  Terre:%d  Roche:%d\nBase   - Li:%d  Bois:%d  Terre:%d  Roche:%d\nLampe: %d%%   Torches: %d   |   %s\n%s" % [obj, int(hp), int(MAX_HP), bagline, res_lithium, res_wood, res_dirt, res_rock, store_lithium, store_wood, store_dirt, store_rock, int(lamp_fuel / LAMP_AUTONOMY * 100.0), torches.size(), base_line, hint]
+		hint = "BASE >  [1] Production (12 roche/8 bois)   [2] Atelier (15 roche/6 bois)   [3] Ameliorer outil   [I] inventaire  [E] deposer  [Q] retirer"
+	hud.text = "%s\nPV: %d/%d    %s\nSac    - Li:%d  Bois:%d  Terre:%d  Roche:%d\nBase   - Li:%d  Bois:%d  Terre:%d  Roche:%d\nLampe: %d%%   Torches: %d   |   %s\n%s" % [obj, int(hp), int(MAX_HP), bagline, _bag_count(LITHIUM), _bag_count(WOOD), _bag_count(DIRT), _bag_count(ROCK), store_lithium, store_wood, store_dirt, store_rock, int(lamp_fuel / LAMP_AUTONOMY * 100.0), torches.size(), base_line, hint]
 
 # --- Boucle -----------------------------------------------------------------
 func _physics_process(delta: float) -> void:
@@ -276,6 +294,8 @@ func _process(delta: float) -> void:
 	_handle_dig(delta)
 	_update_flashes(delta)
 	_update_hud()
+	if inv_open and inv_ui:
+		inv_ui.queue_redraw()   # la pile tenue suit le curseur
 	if msg_t > 0.0:
 		msg_t -= delta
 		if msg_t <= 0.0 and msg_label:
@@ -318,22 +338,86 @@ func _input(event: InputEvent) -> void:
 			_build_workshop()
 		elif event.keycode == KEY_3 or event.physical_keycode == KEY_3:
 			_upgrade_tool()
+		elif event.keycode == KEY_I or event.physical_keycode == KEY_I:
+			_toggle_inventory()
 		elif event.keycode == KEY_K:
 			_damage(MAX_HP)   # mort de test
 
 func _refuel() -> void:
-	if res_lithium > 0 and lamp_fuel < LAMP_AUTONOMY:
-		res_lithium -= 1
+	if _bag_count(LITHIUM) > 0 and lamp_fuel < LAMP_AUTONOMY:
+		_bag_remove(LITHIUM, 1)
 		lamp_fuel = minf(LAMP_AUTONOMY, lamp_fuel + LAMP_REFILL)
 
 func _place_torch() -> void:
 	var cell := Vector2i(int(floor(pos.x / TILE)), int(floor(pos.y / TILE)))
-	if res_wood > 0 and not _is_solid(cell.x, cell.y) and not torches.has(cell):
-		res_wood -= 1
+	if _bag_count(WOOD) > 0 and not _is_solid(cell.x, cell.y) and not torches.has(cell):
+		_bag_remove(WOOD, 1)
 		torches.append(cell)
 
+# --- Sac (slots + piles) ----------------------------------------------------
+func _init_bag() -> void:
+	bag = []
+	for i in BAG_SLOTS:
+		bag.append({})
+
+func _bag_count(t: int) -> int:
+	var n := 0
+	for s in bag:
+		if s.has("type") and s["type"] == t:
+			n += int(s["count"])
+	return n
+
 func _bag_total() -> int:
-	return res_dirt + res_rock + res_wood + res_lithium
+	var n := 0
+	for s in bag:
+		if s.has("count"):
+			n += int(s["count"])
+	return n
+
+func _bag_slots_used() -> int:
+	var n := 0
+	for s in bag:
+		if s.has("type"):
+			n += 1
+	return n
+
+# Ajoute jusqu'à n objets de type t (piles existantes d'abord, puis slots vides).
+# Renvoie la quantité réellement ajoutée (le reste est perdu si le sac est plein).
+func _bag_add(t: int, n: int) -> int:
+	var added := 0
+	for s in bag:
+		if added >= n:
+			break
+		if s.has("type") and s["type"] == t and int(s["count"]) < STACK_MAX:
+			var mv: int = mini(STACK_MAX - int(s["count"]), n - added)
+			s["count"] = int(s["count"]) + mv
+			added += mv
+	for i in bag.size():
+		if added >= n:
+			break
+		if bag[i].is_empty():
+			var mv2: int = mini(STACK_MAX, n - added)
+			bag[i] = {"type": t, "count": mv2}
+			added += mv2
+	return added
+
+# Retire jusqu'à n objets de type t. Renvoie la quantité réellement retirée.
+func _bag_remove(t: int, n: int) -> int:
+	var removed := 0
+	for i in bag.size():
+		if removed >= n:
+			break
+		if bag[i].has("type") and bag[i]["type"] == t:
+			var mv: int = mini(int(bag[i]["count"]), n - removed)
+			bag[i]["count"] = int(bag[i]["count"]) - mv
+			removed += mv
+			if int(bag[i]["count"]) <= 0:
+				bag[i] = {}
+	return removed
+
+func _bag_clear() -> void:
+	for i in bag.size():
+		bag[i] = {}
 
 func _on_ladder() -> bool:
 	var x0 := int((pos.x - half.x + 2) / TILE)
@@ -355,15 +439,15 @@ func _place_ladder() -> void:
 	while placed < LADDER_MAX and ty >= 0:
 		var t := _tile(cx, ty)
 		if t == EMPTY:
-			if res_wood <= 0:
+			if _bag_count(WOOD) <= 0:
 				break
 			grid[ty * GRID_W + cx] = LADDER
-			res_wood -= 1
+			_bag_remove(WOOD, 1)
 			placed += 1
-		elif t == LADDER:
-			pass   # traverse une échelle existante pour l'allonger plus haut
+		elif t == LADDER and placed == 0:
+			pass   # on démarre sur/dans une échelle : on la traverse pour combler le vide au-dessus
 		else:
-			break  # bloc plein → on s'arrête
+			break  # bloc plein, OU échelle déjà posée au-dessus → stop (pas de dépassement)
 		ty -= 1
 	if placed > 0:
 		_flash_msg("Echelle posee : %d tuiles (-%d bois)" % [placed, placed])
@@ -396,12 +480,9 @@ func _die() -> void:
 	if _bag_total() > 0 or has_artefact:
 		cache_active = true
 		cache_pos = pos
-		cache = {"dirt": res_dirt, "rock": res_rock, "wood": res_wood, "lithium": res_lithium}
+		cache = {"dirt": _bag_count(DIRT), "rock": _bag_count(ROCK), "wood": _bag_count(WOOD), "lithium": _bag_count(LITHIUM)}
 		cache_artefact = has_artefact
-		res_dirt = 0
-		res_rock = 0
-		res_wood = 0
-		res_lithium = 0
+		_bag_clear()
 		has_artefact = false
 	# Réapparition à la base, PV pleins
 	pos = base_pos
@@ -415,14 +496,9 @@ func _interact() -> void:
 		_recover_cache()
 
 func _deposit() -> void:
-	store_dirt += res_dirt
-	store_rock += res_rock
-	store_wood += res_wood
-	store_lithium += res_lithium
-	res_dirt = 0
-	res_rock = 0
-	res_wood = 0
-	res_lithium = 0
+	for t in RES_TYPES:
+		_store_add(t, _bag_count(t))
+	_bag_clear()
 	hp = MAX_HP   # on se soigne à la base
 	if has_artefact:
 		has_artefact = false
@@ -431,38 +507,44 @@ func _deposit() -> void:
 	_update_hud()
 
 func _withdraw() -> void:
-	# Base → sac (en priorité le carburant), dans la limite de capacité.
+	# Base → sac : raccourci pratique (priorité au carburant, puis bois/roche/terre),
+	# dans la limite des slots libres. Le réglage fin se fait à l'inventaire (touche I).
 	if pos.distance_to(base_pos) > BASE_RANGE:
 		return
-	var space := BAG_CAP - _bag_total()
-	var n := mini(space, store_lithium)
-	res_lithium += n
-	store_lithium -= n
-	space -= n
-	n = mini(space, store_wood)
-	res_wood += n
-	store_wood -= n
-	space -= n
-	n = mini(space, store_rock)
-	res_rock += n
-	store_rock -= n
-	space -= n
-	n = mini(space, store_dirt)
-	res_dirt += n
-	store_dirt -= n
+	for t in [LITHIUM, WOOD, ROCK, DIRT]:
+		var moved := _bag_add(t, _store_count(t))
+		_store_remove(t, moved)
 	_update_hud()
 
 func _recover_cache() -> void:
-	res_dirt += cache["dirt"]
-	res_rock += cache["rock"]
-	res_wood += cache["wood"]
-	res_lithium += cache["lithium"]
+	_bag_add(DIRT, int(cache["dirt"]))
+	_bag_add(ROCK, int(cache["rock"]))
+	_bag_add(WOOD, int(cache["wood"]))
+	_bag_add(LITHIUM, int(cache["lithium"]))
 	if cache_artefact:
 		has_artefact = true
 		cache_artefact = false
 		_flash_msg("Artefact recupere dans la cache !")
 	cache_active = false
 	_update_hud()
+
+func _store_count(t: int) -> int:
+	match t:
+		DIRT: return store_dirt
+		ROCK: return store_rock
+		WOOD: return store_wood
+		LITHIUM: return store_lithium
+	return 0
+
+func _store_add(t: int, n: int) -> void:
+	match t:
+		DIRT: store_dirt += n
+		ROCK: store_rock += n
+		WOOD: store_wood += n
+		LITHIUM: store_lithium += n
+
+func _store_remove(t: int, n: int) -> void:
+	_store_add(t, -n)
 
 func _near_base() -> bool:
 	return pos.distance_to(base_pos) <= BASE_RANGE
@@ -529,26 +611,27 @@ func _upgrade_tool() -> void:
 
 # --- Déplacement + collision contre la grille -------------------------------
 func _move(delta: float) -> void:
+	var ctl := not inv_open   # commandes désactivées quand l'inventaire est ouvert
 	var dir := 0.0
 	# Touches physiques → marche en ZQSD (AZERTY) ou WASD (QWERTY), + flèches
-	if Input.is_physical_key_pressed(KEY_A) or Input.is_key_pressed(KEY_LEFT):
+	if ctl and (Input.is_physical_key_pressed(KEY_A) or Input.is_key_pressed(KEY_LEFT)):
 		dir -= 1.0
-	if Input.is_physical_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT):
+	if ctl and (Input.is_physical_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT)):
 		dir += 1.0
 	vel.x = dir * MOVE_SPEED
 
 	var on_ladder := _on_ladder()
 	if on_ladder:
 		var climb := 0.0
-		if Input.is_physical_key_pressed(KEY_W) or Input.is_key_pressed(KEY_UP):
+		if ctl and (Input.is_physical_key_pressed(KEY_W) or Input.is_key_pressed(KEY_UP)):
 			climb -= 1.0
-		if Input.is_physical_key_pressed(KEY_S) or Input.is_key_pressed(KEY_DOWN):
+		if ctl and (Input.is_physical_key_pressed(KEY_S) or Input.is_key_pressed(KEY_DOWN)):
 			climb += 1.0
 		vel.y = climb * CLIMB_SPEED
-		if Input.is_physical_key_pressed(KEY_SPACE):
+		if ctl and Input.is_physical_key_pressed(KEY_SPACE):
 			vel.y = -JUMP_SPEED   # sauter pour quitter l'échelle
 	else:
-		if on_floor and (Input.is_physical_key_pressed(KEY_W) or Input.is_physical_key_pressed(KEY_SPACE) or Input.is_key_pressed(KEY_UP)):
+		if ctl and on_floor and (Input.is_physical_key_pressed(KEY_W) or Input.is_physical_key_pressed(KEY_SPACE) or Input.is_key_pressed(KEY_UP)):
 			vel.y = -JUMP_SPEED
 		vel.y += GRAVITY * delta
 		vel.y = clampf(vel.y, -JUMP_SPEED, 600.0)
@@ -601,6 +684,10 @@ func _resolve_axis(is_x: bool) -> bool:
 
 # --- Creusage ---------------------------------------------------------------
 func _handle_dig(delta: float) -> void:
+	if inv_open:
+		dig_target = Vector2i(-1, -1)
+		dig_progress = 0.0
+		return
 	if not Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
 		dig_target = Vector2i(-1, -1)
 		dig_progress = 0.0
@@ -635,17 +722,15 @@ func _break_tile(tx: int, ty: int) -> void:
 	if t == WALL:
 		_update_hud()
 		return   # béton : gravats, rien à ramasser
-	if _bag_total() >= BAG_CAP:
-		_update_hud()
-		return   # sac plein : la ressource est perdue
+	var item := DIRT
 	if t == ROCK or t == HARDROCK:
-		res_rock += 1
+		item = ROCK
 	elif t == WOOD:
-		res_wood += 1
+		item = WOOD
 	elif t == LITHIUM:
-		res_lithium += 1
-	else:
-		res_dirt += 1
+		item = LITHIUM
+	if _bag_add(item, 1) == 0:
+		_flash_msg("Sac plein ! Objet perdu (vide-le a la base, ou touche I)")
 	_update_hud()
 
 func _update_flashes(delta: float) -> void:
@@ -751,6 +836,183 @@ func _brightness(tx: int, ty: int) -> float:
 	var light := maxf(_sky_light(tx, ty) * SKY_STRENGTH, _lamp_light(tx, ty))
 	light = maxf(light, _torch_light(tx, ty))
 	return clampf(light, AMBIENT_MIN, 1.0)
+
+# --- Inventaire (slots + piles, façon Minecraft) ----------------------------
+func _toggle_inventory() -> void:
+	inv_open = not inv_open
+	if inv_ui:
+		inv_ui.visible = inv_open
+		inv_ui.queue_redraw()
+	if not inv_open and not held.is_empty():
+		# On referme en tenant une pile : on la repose au sac (ou au stockage si près base).
+		var back := _bag_add(int(held["type"]), int(held["count"]))
+		var rest := int(held["count"]) - back
+		if rest > 0 and _near_base():
+			_store_add(int(held["type"]), rest)
+			rest = 0
+		if rest > 0:
+			_flash_msg("Inventaire plein : %d objet(s) perdu(s)" % rest)
+		held = {}
+	_update_hud()
+
+func _res_color(t: int) -> Color:
+	match t:
+		DIRT: return Color(0.42, 0.30, 0.20)
+		ROCK: return Color(0.40, 0.42, 0.46)
+		WOOD: return Color(0.55, 0.38, 0.15)
+		LITHIUM: return Color(0.45, 0.74, 0.80)
+	return Color(0.6, 0.6, 0.6)
+
+func _res_name(t: int) -> String:
+	match t:
+		DIRT: return "Terre"
+		ROCK: return "Roche"
+		WOOD: return "Bois"
+		LITHIUM: return "Lithium"
+	return "?"
+
+func _inv_layout(sz: Vector2) -> Dictionary:
+	var cols := INV_COLS
+	var rows := int(ceil(float(BAG_SLOTS) / float(cols)))
+	var step := SLOT + SLOT_PAD
+	var bag_w := cols * step - SLOT_PAD
+	var bag_h := rows * step - SLOT_PAD
+	var near := _near_base()
+	var store_rows := RES_TYPES.size()
+	var store_h := store_rows * step - SLOT_PAD
+	var gap := 70
+	var total_w := bag_w
+	if near:
+		total_w += gap + SLOT
+	var ox := (sz.x - total_w) * 0.5
+	var oy := (sz.y - bag_h) * 0.5
+	var bag_rects := []
+	for i in BAG_SLOTS:
+		var r := i / cols
+		var c := i % cols
+		bag_rects.append(Rect2(ox + c * step, oy + r * step, SLOT, SLOT))
+	var store_rects := []
+	var store_origin := Vector2.ZERO
+	if near:
+		var sx := ox + bag_w + gap
+		var sy := (sz.y - store_h) * 0.5
+		store_origin = Vector2(sx, sy)
+		for i in store_rows:
+			store_rects.append(Rect2(sx, sy + i * step, SLOT, SLOT))
+	return {"bag": bag_rects, "store": store_rects, "near": near, "bag_origin": Vector2(ox, oy), "store_origin": store_origin, "bag_h": bag_h}
+
+func draw_inventory(cv: Control) -> void:
+	var sz := cv.get_size()
+	var font := ThemeDB.fallback_font
+	cv.draw_rect(Rect2(Vector2.ZERO, sz), Color(0, 0, 0, 0.55))
+	var L := _inv_layout(sz)
+	var bo: Vector2 = L["bag_origin"]
+	cv.draw_string(font, bo + Vector2(0, -10), "SAC  (%d/%d slots)" % [_bag_slots_used(), BAG_SLOTS], HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(0.9, 0.95, 0.85))
+	var bag_rects: Array = L["bag"]
+	for i in BAG_SLOTS:
+		_draw_slot(cv, font, bag_rects[i], bag[i], false)
+	if bool(L["near"]):
+		var so: Vector2 = L["store_origin"]
+		cv.draw_string(font, so + Vector2(0, -10), "STOCKAGE BASE", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(0.6, 1.0, 0.7))
+		var store_rects: Array = L["store"]
+		for i in RES_TYPES.size():
+			var rt: int = RES_TYPES[i]
+			_draw_slot(cv, font, store_rects[i], {"type": rt, "count": _store_count(rt)}, false)
+	else:
+		var note := "Approche-toi de la base pour acceder au stockage"
+		var nw := font.get_string_size(note, HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x
+		cv.draw_string(font, Vector2((sz.x - nw) * 0.5, bo.y + float(L["bag_h"]) + 28), note, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(0.85, 0.8, 0.5))
+	if not held.is_empty():
+		var m := cv.get_local_mouse_position()
+		_draw_slot(cv, font, Rect2(m - Vector2(SLOT * 0.5, SLOT * 0.5), Vector2(SLOT, SLOT)), held, true)
+	var help := "Clic: prendre / poser / fusionner     Maj+Clic: transfert rapide sac <-> base     [I] fermer"
+	var hw := font.get_string_size(help, HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x
+	cv.draw_string(font, Vector2((sz.x - hw) * 0.5, sz.y - 26), help, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(0.8, 0.82, 0.88))
+
+func _draw_slot(cv: Control, font: Font, rect: Rect2, slot: Dictionary, floating: bool) -> void:
+	if not floating:
+		cv.draw_rect(rect, Color(0.12, 0.13, 0.16, 0.96))
+		cv.draw_rect(rect, Color(0.5, 0.52, 0.58), false, 1.0)
+	if slot.has("type") and int(slot.get("count", 0)) > 0:
+		cv.draw_rect(Rect2(rect.position + Vector2(3, 3), rect.size - Vector2(6, 6)), _res_color(int(slot["type"])))
+		var n := str(int(slot["count"]))
+		var ns := font.get_string_size(n, HORIZONTAL_ALIGNMENT_LEFT, -1, 11)
+		cv.draw_string(font, rect.position + Vector2(rect.size.x - 3 - ns.x, rect.size.y - 3), n, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(1, 1, 1))
+
+func inventory_click(p: Vector2, shift: bool) -> void:
+	if inv_ui == null:
+		return
+	var L := _inv_layout(inv_ui.get_size())
+	var bag_rects: Array = L["bag"]
+	for i in BAG_SLOTS:
+		if (bag_rects[i] as Rect2).has_point(p):
+			_click_bag(i, shift)
+			inv_ui.queue_redraw()
+			return
+	if bool(L["near"]):
+		var store_rects: Array = L["store"]
+		for i in RES_TYPES.size():
+			if (store_rects[i] as Rect2).has_point(p):
+				_click_store(int(RES_TYPES[i]), shift)
+				inv_ui.queue_redraw()
+				return
+	# Clic dans le vide en tenant une pile → on la repose dans le sac.
+	if not held.is_empty():
+		var back := _bag_add(int(held["type"]), int(held["count"]))
+		if back > 0:
+			held["count"] = int(held["count"]) - back
+			if int(held["count"]) <= 0:
+				held = {}
+		inv_ui.queue_redraw()
+
+func _click_bag(i: int, shift: bool) -> void:
+	if shift:
+		if not _near_base():
+			_flash_msg("Approche la base pour stocker")
+			return
+		if bag[i].has("type"):
+			_store_add(int(bag[i]["type"]), int(bag[i]["count"]))
+			bag[i] = {}
+		_update_hud()
+		return
+	if held.is_empty():
+		if bag[i].has("type"):
+			held = bag[i]
+			bag[i] = {}
+	else:
+		if bag[i].is_empty():
+			bag[i] = held
+			held = {}
+		elif int(bag[i]["type"]) == int(held["type"]):
+			var mv: int = mini(STACK_MAX - int(bag[i]["count"]), int(held["count"]))
+			bag[i]["count"] = int(bag[i]["count"]) + mv
+			held["count"] = int(held["count"]) - mv
+			if int(held["count"]) <= 0:
+				held = {}
+		else:
+			var tmp = bag[i]
+			bag[i] = held
+			held = tmp
+	_update_hud()
+
+func _click_store(rt: int, shift: bool) -> void:
+	if shift:
+		var moved := _bag_add(rt, _store_count(rt))
+		_store_remove(rt, moved)
+		_update_hud()
+		return
+	if held.is_empty():
+		var take: int = mini(STACK_MAX, _store_count(rt))
+		if take > 0:
+			held = {"type": rt, "count": take}
+			_store_remove(rt, take)
+	else:
+		if int(held["type"]) == rt:
+			_store_add(rt, int(held["count"]))
+			held = {}
+		else:
+			_flash_msg("Ce casier ne prend que: %s" % _res_name(rt))
+	_update_hud()
 
 # --- Rendu (grey-box) -------------------------------------------------------
 func _draw() -> void:

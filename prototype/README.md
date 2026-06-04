@@ -23,10 +23,12 @@ godot --editor --path prototype
 
 - **ZQSD** (ou WASD) ou **← / →** : se déplacer · **Espace / Z / ↑** : sauter
 - **Clic gauche** : creuser la tuile visée (dans le rayon autour du héros)
+- **I** : ouvrir/fermer l'**inventaire** (sac en grille de slots + stockage de base) —
+  **clic** = prendre/poser/fusionner une pile, **Maj+clic** = transfert rapide sac ↔ base
 - **R** : recharger la lampe (lithium) · **T** : poser une torche (bois)
 - **F** : poser une **échelle** (bois) dans la colonne, des pieds vers le haut — puis **Z/S** (ou ↑/↓) pour **grimper**
 - **E** : déposer à la base (si proche) / récupérer une cache (si proche)
-- **Q** : retirer de la base vers le sac (si proche — priorité au carburant)
+- **Q** : retirer de la base vers le sac (raccourci ; le réglage fin se fait à l'inventaire)
 - **1 / 2 / 3** (près de la base) : construire **Production** / **Atelier** / **améliorer l'outil**
 - **K** : mourir (test — largue le butin dans une cache)
 
@@ -56,6 +58,11 @@ godot --editor --path prototype
   dense** (nécessite l'**outil Fer** → retour base + atelier + amélioration), récupérer
   l'**Artefact** au fond et le **rapporter à la base** pour **gagner** (objectif suivi dans le HUD).
   Mourir en le portant le largue dans la **cache**. ✅
+- **Inventaire à slots (façon Minecraft)** : le sac est une **grille de cases** ; les objets
+  identiques s'**empilent** (un type = 1 slot tant que la pile n'est pas pleine), ce qui corrige
+  le « sac qui se remplit trop vite ». Écran d'inventaire (`I`) avec **glisser via clic**
+  (prendre/poser/fusionner une pile) et **Maj+clic** pour transférer vite **sac ↔ stockage**,
+  pour enfin **choisir ce qu'on rapporte**. Le stockage de base reste illimité. ✅
 - Tout est piloté par `scripts/Game.gd` ; les **valeurs réglables** (vitesse de creusage,
   gravité, saut, portée, **rayon/portée de lumière**…) sont en haut du script.
 

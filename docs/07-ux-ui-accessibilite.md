@@ -33,8 +33,11 @@ récupérable** sur place (façon Souls) : on peut repartir le chercher, au risq
 > **nombre de slots** (pas un poids abstrait). Transfert sac ↔ stockage de base par
 > glisser-déposer. *Écran UI dédié à briefer plus tard (cf. brief HUD : explicitement « pas
 > maintenant »), sans doute au Jalon 3 avec l'UI de base.*
-> 💡 *Dans le prototype*, l'inventaire est abstrait (compteur d'objets + touches E/Q) : on teste
-> la **mécanique d'extraction**, pas l'ergonomie finale.
+> 💡 *Dans le prototype* (grey-box) : un **vrai inventaire à slots** est implémenté — sac en
+> **grille de cases**, objets en **piles/stacks**, écran d'inventaire (`I`) avec **clic**
+> (prendre/poser/fusionner) et **Maj+clic** (transfert rapide sac ↔ stockage). La « capacité » =
+> un **nombre de slots** (terre = 1 slot, pas 25). Reste à concevoir pour le jeu final :
+> esthétique terminal, **hotbar**, tri auto, glisser-déposer continu, paliers d'amélioration du sac.
 > 💡 *À détailler* : taille de départ du sac (nb de slots), paliers d'amélioration, durée de vie de la cache.
 - [ ] Validé
 
