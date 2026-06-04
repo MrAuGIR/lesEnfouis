@@ -15,7 +15,10 @@ de la base et travaillent automatiquement (production, défense).
 **R.** 🟡 Proposition à valider :
 `Depuis la base → creuser/explorer le sous-sol vers le haut → récolter des ressources & affronter les dangers → revenir à la base avec le butin → investir (construire des pièces, affecter des PNJ, crafter de l'équipement) → repartir plus loin / plus haut`.
 > 💡 *À confirmer* : c'est la boucle « expédition → retour → développement → expédition ».
-- [ ] Validé
+> ✅ **Validée en prototype (juin 2026)** : la boucle complète est jouable et jugée **fun**
+> (cf. risque n°1 levé, [08](08-perimetre-production.md)). Le combat/les dangers restent à
+> ajouter en production.
+- [x] Validé (cœur prouvé en prototype ; combat à venir)
 
 ### Q. Comment fonctionne le creusage / l'exploration ?
 **R.** ✅ Le héros **creuse façon Minecraft** dans une **terre/roche creusable**, mais les

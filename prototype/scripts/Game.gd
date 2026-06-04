@@ -69,6 +69,23 @@ const DIG_TIERS := [1.0, 0.65, 0.45]              # mult. de temps (Pierre→Fer
 const TIER_NAMES := ["Pierre", "Fer", "Acier"]
 const UPGRADE_COST := [{}, {"rock": 15, "lithium": 8}, {"rock": 25, "lithium": 16}]
 
+# --- Combat (Jalon 5a : mêlée) ----------------------------------------------
+const ENEMY_COUNT := 8           # robots dispersés dans le sous-sol
+const ENEMY_HP := 60.0
+const ENEMY_SPEED := 42.0        # px/s en patrouille
+const ENEMY_CHASE_MULT := 1.5    # vitesse en poursuite
+const ENEMY_DMG := 12.0          # dégâts de contact au héros
+const ENEMY_HIT_CD := 0.8        # s entre deux coups d'un même robot
+const ENEMY_LOOT := 3            # lithium (batteries) lâché à la mort
+const DETECT_RANGE := 9.0        # tuiles : portée de détection du héros (avec ligne de vue)
+const ENEMY_HALF := Vector2(6, 7)
+const MELEE_RANGE := 1.7 * TILE  # portée du coup
+const MELEE_ARC := 0.2           # produit scalaire mini (cône d'attaque vers la souris)
+const MELEE_DMG := 34.0          # ~2 coups pour tuer un robot
+const MELEE_CD := 0.42           # s entre deux coups du héros
+const MELEE_VIS := 0.16          # s d'affichage de l'arc de coup
+const MELEE_KNOCK := 120.0       # recul infligé au robot touché
+
 # --- Objectif (Jalon 4) -----------------------------------------------------
 const HARD_MULT := 4.5            # creusage de la roche dense (très lent)
 const BAND_TOP := AIR_ROWS + 50   # profondeur de la barrière de roche dense
@@ -132,6 +149,12 @@ var has_artefact := false         # objectif transporté
 var cache_artefact := false       # l'artefact est tombé dans la cache (mort)
 var won := false                  # objectif accompli
 
+# Combat (J5a) : chaque robot = {pos,vel:Vector2, hp:float, dir:float,
+# on_floor:bool, blocked:bool, hit_cd:float, flash:float}
+var enemies := []
+var atk_cd := 0.0                 # cooldown du coup du héros
+var atk_t := 0.0                  # reste d'affichage de l'arc de coup
+
 var flashes := []   # éclats de creusage : {cell:Vector2i, t:float}
 
 var camera: Camera2D
@@ -147,6 +170,7 @@ func _ready() -> void:
 	_generate_world()
 	_spawn_player()
 	base_pos = pos
+	_spawn_enemies()
 	_make_camera()
 	_make_hud()
 
@@ -275,7 +299,7 @@ func _update_hud() -> void:
 		obj = "*** GAGNE ! Artefact rapporte a la base ***"
 	elif has_artefact:
 		obj = ">> Artefact EN MAIN -- rentre le deposer a la base ! <<"
-	var hint := "[ZQSD/Fleches] bouger/grimper  [Espace] saut  [Clic] creuser  [I] inventaire  [F] echelle  [R] lampe  [T] torche  [E] deposer  [Q] retirer  [K] mort"
+	var hint := "[ZQSD/Fleches] bouger/grimper  [Espace] saut  [Clic G] creuser  [Clic D] frapper  [I] inventaire  [F] echelle  [R] lampe  [T] torche  [E] deposer  [Q] retirer  [K] mort"
 	if _near_base():
 		hint = "BASE >  [1] Production (12 roche/8 bois)   [2] Atelier (15 roche/6 bois)   [3] Ameliorer outil   [I] inventaire  [E] deposer  [Q] retirer"
 	hud.text = "%s\nPV: %d/%d    %s\nSac    - Li:%d  Bois:%d  Terre:%d  Roche:%d\nBase   - Li:%d  Bois:%d  Terre:%d  Roche:%d\nLampe: %d%%   Torches: %d   |   %s\n%s" % [obj, int(hp), int(MAX_HP), bagline, _bag_count(LITHIUM), _bag_count(WOOD), _bag_count(DIRT), _bag_count(ROCK), store_lithium, store_wood, store_dirt, store_rock, int(lamp_fuel / LAMP_AUTONOMY * 100.0), torches.size(), base_line, hint]
@@ -283,6 +307,7 @@ func _update_hud() -> void:
 # --- Boucle -----------------------------------------------------------------
 func _physics_process(delta: float) -> void:
 	_move(delta)
+	_update_enemies(delta)
 	if camera:
 		camera.global_position = pos
 
@@ -291,6 +316,7 @@ func _process(delta: float) -> void:
 	_deplete_lamp(delta)
 	_produce(delta)
 	_check_artefact()
+	_update_combat(delta)
 	_handle_dig(delta)
 	_update_flashes(delta)
 	_update_hud()
@@ -608,6 +634,147 @@ func _upgrade_tool() -> void:
 	dig_time = DIG_TIME * DIG_TIERS[dig_level]
 	_flash_msg("Outil ameliore : %s (creusage plus rapide)" % TIER_NAMES[dig_level])
 	_update_hud()
+
+# --- Combat (J5a : mêlée) ---------------------------------------------------
+func _spawn_enemies() -> void:
+	enemies = []
+	# Rencontre garantie pour amorcer le combat : un robot dans le bunker de départ
+	# (juste sous le spawn), facile à trouver dès la première descente.
+	var cx := int(GRID_W * 0.5)
+	_add_enemy(Vector2((cx + 2) * TILE + TILE * 0.5, (surface[cx] + 10) * TILE + TILE * 0.5))
+	# Le reste dispersé dans les cavernes du sous-sol.
+	var tries := 0
+	while enemies.size() < ENEMY_COUNT and tries < 3000:
+		tries += 1
+		var tx := randi_range(4, GRID_W - 5)
+		var ty := randi_range(AIR_ROWS + 16, GRID_H - 4)
+		# une case vide avec du sol dessous et de la place au-dessus (tête)
+		if _tile(tx, ty) != EMPTY or _tile(tx, ty - 1) != EMPTY or not _is_solid(tx, ty + 1):
+			continue
+		var p := Vector2(tx * TILE + TILE * 0.5, ty * TILE + TILE * 0.5)
+		if p.distance_to(base_pos) < 10.0 * TILE:
+			continue   # petite zone de répit autour de la base
+		_add_enemy(p)
+
+func _add_enemy(p: Vector2) -> void:
+	enemies.append({"pos": p, "vel": Vector2.ZERO, "hp": ENEMY_HP, "dir": (1.0 if randf() < 0.5 else -1.0), "on_floor": false, "blocked": false, "hit_cd": 0.0, "flash": 0.0})
+
+func _update_enemies(delta: float) -> void:
+	if inv_open:
+		return   # l'inventaire fige le jeu (héros ET robots)
+	for e in enemies:
+		e["hit_cd"] = maxf(0.0, float(e["hit_cd"]) - delta)
+		e["flash"] = maxf(0.0, float(e["flash"]) - delta)
+		var to_player: Vector2 = pos - e["pos"]
+		var dist := to_player.length()
+		var ec := Vector2(e["pos"].x / TILE, e["pos"].y / TILE)
+		var chasing := dist < DETECT_RANGE * TILE and _los_clear_from(ec, int(pos.x / TILE), int(pos.y / TILE))
+		if chasing:
+			e["dir"] = signf(to_player.x) if absf(to_player.x) > 2.0 else e["dir"]
+			if bool(e["blocked"]) and bool(e["on_floor"]):
+				e["vel"].y = -JUMP_SPEED * 0.8   # saute l'obstacle pour poursuivre
+		else:
+			# patrouille : demi-tour au mur ou au bord du vide (ne pas tomber bêtement)
+			if bool(e["on_floor"]):
+				var ahead_x: float = e["pos"].x + e["dir"] * (ENEMY_HALF.x + 3.0)
+				var foot_y: float = e["pos"].y + ENEMY_HALF.y + 4.0
+				if bool(e["blocked"]) or not _is_solid(int(ahead_x / TILE), int(foot_y / TILE)):
+					e["dir"] = -float(e["dir"])
+		e["blocked"] = false
+		var spd := ENEMY_SPEED * (ENEMY_CHASE_MULT if chasing else 1.0)
+		e["vel"].x = float(e["dir"]) * spd
+		_move_enemy(e, delta)
+		# Contact → dégâts au héros (avec cooldown par robot) + petit recul
+		if _aabb_overlap(pos, half, e["pos"], ENEMY_HALF) and float(e["hit_cd"]) <= 0.0:
+			e["hit_cd"] = ENEMY_HIT_CD
+			_damage(ENEMY_DMG)
+			vel.x = signf(pos.x - e["pos"].x) * MOVE_SPEED
+
+func _move_enemy(e: Dictionary, delta: float) -> void:
+	e["pos"].x += e["vel"].x * delta
+	var rx := _collide_axis(e["pos"], ENEMY_HALF, e["vel"], true)
+	e["pos"] = rx["pos"]
+	e["vel"] = rx["vel"]
+	if bool(rx["blocked"]):
+		e["blocked"] = true
+	e["vel"].y += GRAVITY * delta
+	e["vel"].y = clampf(e["vel"].y, -JUMP_SPEED, 600.0)
+	e["pos"].y += e["vel"].y * delta
+	var ry := _collide_axis(e["pos"], ENEMY_HALF, e["vel"], false)
+	e["pos"] = ry["pos"]
+	e["vel"] = ry["vel"]
+	e["on_floor"] = bool(ry["landed"])
+
+# Résolution AABB-vs-grille générique (pour les robots ; pure, sans état membre).
+func _collide_axis(p: Vector2, hf: Vector2, v: Vector2, is_x: bool) -> Dictionary:
+	var landed := false
+	var blocked := false
+	var min_tx := int(floor((p.x - hf.x) / TILE))
+	var max_tx := int(floor((p.x + hf.x - 0.001) / TILE))
+	var min_ty := int(floor((p.y - hf.y) / TILE))
+	var max_ty := int(floor((p.y + hf.y - 0.001) / TILE))
+	for ty in range(min_ty, max_ty + 1):
+		for tx in range(min_tx, max_tx + 1):
+			if not _is_solid(tx, ty):
+				continue
+			var l := p.x - hf.x
+			var r := p.x + hf.x
+			var t := p.y - hf.y
+			var b := p.y + hf.y
+			var tl := tx * TILE
+			var tr := tl + TILE
+			var tt := ty * TILE
+			var tb := tt + TILE
+			if l < tr and r > tl and t < tb and b > tt:
+				if is_x:
+					if v.x > 0.0:
+						p.x = tl - hf.x
+					elif v.x < 0.0:
+						p.x = tr + hf.x
+					v.x = 0.0
+					blocked = true
+				else:
+					if v.y > 0.0:
+						p.y = tt - hf.y
+						landed = true
+					elif v.y < 0.0:
+						p.y = tb + hf.y
+					v.y = 0.0
+	return {"pos": p, "vel": v, "landed": landed, "blocked": blocked}
+
+func _aabb_overlap(p1: Vector2, h1: Vector2, p2: Vector2, h2: Vector2) -> bool:
+	return absf(p1.x - p2.x) < h1.x + h2.x and absf(p1.y - p2.y) < h1.y + h2.y
+
+func _update_combat(delta: float) -> void:
+	atk_cd = maxf(0.0, atk_cd - delta)
+	atk_t = maxf(0.0, atk_t - delta)
+	if inv_open:
+		return
+	if Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT) and atk_cd <= 0.0:
+		_melee_attack()
+
+func _melee_attack() -> void:
+	atk_cd = MELEE_CD
+	atk_t = MELEE_VIS
+	for e in enemies:
+		var v: Vector2 = e["pos"] - pos
+		var d := v.length()
+		if d <= MELEE_RANGE and (d < 0.001 or v.normalized().dot(aim) >= MELEE_ARC):
+			e["hp"] = float(e["hp"]) - MELEE_DMG
+			e["flash"] = MELEE_VIS
+			e["vel"] += aim * MELEE_KNOCK
+	_cull_enemies()
+
+func _cull_enemies() -> void:
+	var alive := []
+	for e in enemies:
+		if float(e["hp"]) > 0.0:
+			alive.append(e)
+		else:
+			_bag_add(LITHIUM, ENEMY_LOOT)
+			flashes.append({"cell": Vector2i(int(e["pos"].x / TILE), int(e["pos"].y / TILE)), "t": 0.3})
+			_flash_msg("Robot detruit (+%d lithium)" % ENEMY_LOOT)
+	enemies = alive
 
 # --- Déplacement + collision contre la grille -------------------------------
 func _move(delta: float) -> void:
@@ -1089,6 +1256,21 @@ func _draw() -> void:
 		var tc := Vector2(c.x * TILE + TILE * 0.5, c.y * TILE + TILE * 0.5)
 		draw_circle(tc, TORCH_CORE * TILE, Color(1.0, 0.7, 0.3, 0.12))
 		draw_rect(Rect2(tc + Vector2(-2, -5), Vector2(4, 10)), Color(1.0, 0.75, 0.35))
+	# Robots (visibles surtout sous la lumière — sinon silhouette à peine perceptible)
+	for e in enemies:
+		var ep: Vector2 = e["pos"]
+		var vis: float = maxf(0.28, _brightness(int(ep.x / TILE), int(ep.y / TILE)))
+		var flash := float(e["flash"]) > 0.0
+		var col := Color(1.0, 0.95, 0.95) if flash else Color(0.85, 0.30, 0.25)
+		draw_rect(Rect2(ep - ENEMY_HALF, ENEMY_HALF * 2.0), Color(col.r * vis, col.g * vis, col.b * vis))
+		draw_rect(Rect2(ep - ENEMY_HALF, ENEMY_HALF * 2.0), Color(0, 0, 0, 0.5 * vis), false, 1.0)
+		# "oeil" tourné vers le sens de marche
+		draw_rect(Rect2(ep + Vector2(float(e["dir"]) * 2.0 - 1.5, -3.0), Vector2(3, 3)), Color(1.0, 0.85, 0.4, vis))
+		if float(e["hp"]) < ENEMY_HP:
+			var w := ENEMY_HALF.x * 2.0
+			var frac: float = clampf(float(e["hp"]) / ENEMY_HP, 0.0, 1.0)
+			draw_rect(Rect2(ep + Vector2(-ENEMY_HALF.x, -ENEMY_HALF.y - 5.0), Vector2(w, 2)), Color(0.25, 0.0, 0.0))
+			draw_rect(Rect2(ep + Vector2(-ENEMY_HALF.x, -ENEMY_HALF.y - 5.0), Vector2(w * frac, 2)), Color(0.95, 0.25, 0.25))
 	# Base (dépôt, à la surface) et cache de butin (à la mort)
 	draw_circle(base_pos, BASE_RANGE, Color(0.3, 0.9, 0.4, 0.08))
 	draw_rect(Rect2(base_pos + Vector2(-9, -3), Vector2(18, 6)), Color(0.3, 0.85, 0.4))
@@ -1111,3 +1293,7 @@ func _draw() -> void:
 	draw_circle(pos, LAMP_AMBIENT_CORE * TILE, Color(c_lamp.r, c_lamp.g, c_lamp.b, 0.10 * lamp_factor))
 	draw_rect(Rect2(pos - half, half * 2.0), Color(0.95, 0.85, 0.5))
 	draw_rect(Rect2(pos - half, half * 2.0), Color(0.2, 0.15, 0.05, 0.8), false, 1.0)
+	# Arc de coup (feedback du clic droit)
+	if atk_t > 0.0:
+		var a: float = clampf(atk_t / MELEE_VIS, 0.0, 1.0)
+		draw_circle(pos + aim * MELEE_RANGE * 0.55, MELEE_RANGE * 0.5, Color(1.0, 1.0, 1.0, 0.20 * a))

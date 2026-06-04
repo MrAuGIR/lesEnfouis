@@ -41,6 +41,11 @@ cœur « creuser / récolter / revenir avec son butin » est-il satisfaisant ? T
 dépend, d'où le **vertical slice** ci-dessus. Autres risques à surveiller : imbrication
 **action ↔ gestion de base**, **lisibilité** du monde sombre, et **charge de production** du
 contenu (couches, pièces, pixel art).
+> ✅ **RISQUE N°1 LEVÉ (prototype, juin 2026).** Vertical slice jouable de bout en bout
+> (creuser → lumière/carburant → sac limité → extraction/mort-cache → base/PNJ/craft →
+> objectif Artefact). Verdict joueur : **« creuser et extraire est plus fun »** une fois
+> l'**inventaire à slots** (piles + transfert choisi sac↔base) en place — c'était le frein
+> ergonomique. Feu vert pour la **production** (combat, contenu, art final).
 - [ ] Validé
 
 ### Q. Quel modèle économique / de distribution ?

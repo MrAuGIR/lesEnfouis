@@ -62,6 +62,11 @@ progression.
 de frames par action) pour rester réaliste en production indie.
 > 🔒 Direction validée. *Les sprite sheets d'animation se briefent par lots **après** le
 > prototype (grey-box d'abord).*
+> 📝 *Intentions remontées au playtest du proto J5a (à intégrer aux briefs d'anim production) :*
+> *— **coup de mêlée** = **arc de cercle orienté** vers la direction visée (feedback « sabre »*
+> *façon Zelda), pas le simple cercle placeholder actuel ;*
+> *— **ennemis (robot)** : l'**orientation visuelle face au joueur** quand ils sont en alerte*
+> *(le gameplay le fait déjà : détection → poursuite ; reste l'anim idle/marche/attaque + le flip).*
 - [x] Validé
 
 ### Q. Style de l'UI/HUD ?

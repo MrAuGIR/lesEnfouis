@@ -23,6 +23,7 @@ godot --editor --path prototype
 
 - **ZQSD** (ou WASD) ou **← / →** : se déplacer · **Espace / Z / ↑** : sauter
 - **Clic gauche** : creuser la tuile visée (dans le rayon autour du héros)
+- **Clic droit** : **frapper** (mêlée) dans la direction de la souris — contre les robots
 - **I** : ouvrir/fermer l'**inventaire** (sac en grille de slots + stockage de base) —
   **clic** = prendre/poser/fusionner une pile, **Maj+clic** = transfert rapide sac ↔ base
 - **R** : recharger la lampe (lithium) · **T** : poser une torche (bois)
@@ -63,6 +64,11 @@ godot --editor --path prototype
   le « sac qui se remplit trop vite ». Écran d'inventaire (`I`) avec **glisser via clic**
   (prendre/poser/fusionner une pile) et **Maj+clic** pour transférer vite **sac ↔ stockage**,
   pour enfin **choisir ce qu'on rapporte**. Le stockage de base reste illimité. ✅
+- **Jalon 5a — combat mêlée** : des **robots** (grey-box rouge) patrouillent le sous-sol,
+  **poursuivent** le héros à vue (avec ligne de vue) et infligent des **dégâts au contact**.
+  Le héros **frappe au clic droit** (arc court vers la souris, cooldown) ; ~2 coups détruisent
+  un robot, qui **lâche du lithium** (batteries). Ils sont **peu visibles dans le noir** →
+  la lampe sert aussi à les repérer. *(Arme à feu + munitions = sous-étape suivante.)* 🟡
 - Tout est piloté par `scripts/Game.gd` ; les **valeurs réglables** (vitesse de creusage,
   gravité, saut, portée, **rayon/portée de lumière**…) sont en haut du script.
 
