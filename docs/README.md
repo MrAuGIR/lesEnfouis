@@ -23,7 +23,7 @@
 
 > **Un jeu de survie, de construction et d'exploration souterraine en 2D (vue en coupe).
 > L'humanité s'est enfouie sous terre après l'apocalypse. On dirige un survivant qui
-> creuse le sol pour explorer un monde fait de couches de civilisations, récolte des
+> creuse le sol pour explorer un monde fait de zones fonctionnelles successives, récolte des
 > ressources, affronte humains et robots, et bâtit des bases façon Fallout Shelter — avec
 > pour objectif de remonter vers la surface, de plus en plus dangereuse.**
 
@@ -64,7 +64,7 @@
 
 ## Glossaire (termes du projet)
 
-- **Les couches** — strates successives du sous-sol, correspondant à différentes civilisations ; plus on monte, plus c'est dangereux.
+- **Les zones (ou couches)** — strates fonctionnelles successives du sous-sol (transit, usines, militaire/labos…) ; plus on monte, plus c'est dangereux.
 - **La base** — abri bâti dans le décor en coupe, à partir d'une bibliothèque de pièces (production, crafting, défense).
 - **Les abris-relais** — petits abris de bas niveau posés en exploration pour se reposer/sécuriser un chemin.
 - **Le butin** — ressources/objets transportés par le héros, perdus en cas de mort hors base.

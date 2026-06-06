@@ -25,7 +25,7 @@
 
 Jeu de **survie / construction / exploration souterraine** en **2D vue en coupe**. Après une
 3e Guerre mondiale achevée par une IA, l'humanité s'est **enfouie**. On creuse un monde fait de
-**couches de civilisations** pour **remonter vers la surface** (de plus en plus dangereuse).
+**zones fonctionnelles successives** pour **remonter vers la surface** (de plus en plus dangereuse).
 **Ton :** sombre post-apo, **humour à la Fallout**, **mystère à la Metro 2033**.
 **Références jeu :** Minecraft, Fallout Shelter, Metro 2033, Terraria.
 
@@ -45,16 +45,16 @@ Faire ressentir la **petite lumière qui s'enfonce dans le noir** : un sous-sol 
 
 ## 4. Palette & identité par couche
 
-Une **palette signature par couche** (on doit savoir où l'on est d'un coup d'œil). De bas
-(ancien, sûr) en haut (récent, mortel) :
+Une **palette signature par zone** (on doit savoir où l'on est d'un coup d'œil). De bas
+(profond, sûr) en haut (proche surface, mortel) :
 
-| Couche | Époque | Palette / ambiance |
+| Zone | Fonction | Palette / ambiance |
 |--------|--------|--------------------|
-| ⛟ **Foyer** | Moderne (refuge) | Chaud, **lumineux, vivant** (le havre) |
-| 🏺 **Antiquité** | la plus ancienne | **Ocres / dorés chauds**, terre cuite, braseros |
-| 🏰 **Médiéval** | — | **Gris-bleu froid**, pierre, mousse, torches |
-| ⚙️ **Industriel** | — | **Acier / rouille + accents néon**, début de **brume de pollution** |
-| ☀️ **Surface** | Présent / catastrophe | **Lumière crue voilée, gris-jaune toxique** (contraste violent) |
+| ⛟ **Foyer** | refuge (départ) | **Ocres / ambré chauds**, **lumineux, vivant** (le havre) |
+| 🚇 **Transit** | tunnels / infrastructure | **Gris-bleu froid**, béton, humidité |
+| ⚙️ **Usines** | production autonome | **Acier / rouille + accents néon**, début de **brume de pollution** |
+| 🛡️ **Militaire / Labos** | commandement / IA | **Froid / clinique + alertes rouges** |
+| ☀️ **Surface** | présent / catastrophe | **Lumière crue voilée, gris-jaune toxique** (contraste violent) |
 
 > La **brume / les gaz de pollution** : traitement visuel **signature**, reconnaissable
 > partout (teinte malsaine, légèrement mouvante), de plus en plus présent vers le haut.
@@ -86,7 +86,7 @@ Le sous-sol est **sombre** : la lumière n'est pas que de l'ambiance, c'est du *
 
 - **Humour Fallout :** affiches de **propagande**, objets **rétro-futuristes** décalés, slogans d'époque.
 - **Mystère Metro :** ruines évocatrices, traces d'une catastrophe, atmosphère feutrée.
-- Chaque couche = une **époque** : l'architecture et les props doivent la raconter (temples antiques, cryptes médiévales, usines & automates rouillés).
+- Chaque zone = une **fonction** : l'architecture et les props doivent la raconter (tunnels/transit en béton, usines & automates rouillés, complexe militaire & labos d'IA).
 
 ## 9. Références (pour le mood board)
 

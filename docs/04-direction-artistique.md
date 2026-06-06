@@ -35,14 +35,14 @@ pousse sa propre teinte.
 > [héros](../concept-art/concept-hero.png) et [robot](../concept-art/concept_enemis_robot.png).
 - [x] Validé
 
-### Q. Chaque couche/civilisation a-t-elle une identité visuelle distincte ?
-**R.** ✅ **Oui, identité forte par couche** : palette, architecture et props distincts pour
-chaque civilisation/époque. Aide à se repérer dans la verticalité et **raconte
-visuellement** l'empilement des civilisations.
-> 🔒 *Palettes définies* par couche en [06](06-contenu-progression.md) : Antiquité = ocres
-> chauds · Médiéval = gris-bleu froid · Industriel = acier/rouille + néon · Surface =
-> gris-jaune toxique. **Validé** sur la couche Industrielle (planche de référence) ; les autres
-> couches déclinent la même grammaire.
+### Q. Chaque zone a-t-elle une identité visuelle distincte ?
+**R.** ✅ **Oui, identité forte par zone** : palette, architecture et props distincts pour
+chaque **fonction** (transit, usines, militaire/labos…). Aide à se repérer dans la
+verticalité et **raconte visuellement** la progression vers la surface.
+> 🔒 *Palettes réaffectées* aux zones en [06](06-contenu-progression.md) : Foyer = ocres/ambre
+> chauds · Transit = gris-bleu froid · Usines = acier/rouille + néon · Militaire/Labos =
+> froid/clinique + alertes rouges · Surface = gris-jaune toxique. **Validé** sur la zone
+> Usines (planche de référence « Industrielle ») ; les autres zones déclinent la même grammaire.
 - [x] Validé
 
 ### Q. Comment gérer la lumière / la visibilité sous terre ?

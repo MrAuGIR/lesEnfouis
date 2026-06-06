@@ -61,7 +61,7 @@ compétence.
 **R.** ✅ **Uniquement deux familles** : ennemis **humains** (pillards/factions) et
 **robots**, rencontrés dans les **caves et bunkers** explorés. Pas de créatures/mutants —
 choix de focalisation (moins d'assets, identité claire). Les familles sont **déclinées par
-couche/époque** (humains/robots d'ères différentes selon la civilisation de la couche). Les **robots** apparaissent surtout dans les couches hautes (Industriel + Surface). Nuance
+zone** (variantes selon la fonction de la zone). Les **robots** apparaissent surtout dans les zones hautes (Usines + Militaire/Labos + Surface). Nuance
 lore : les machines **solitaires / sans maître** (plus on s'éloigne de la surface) sont les
 vestiges des **IA 'perdantes'** de la guerre, hostiles par automatisme aveugle ; les machines
 **proches de / à la surface** sont **contrôlées par l'IA 'victorieuse'** (le boss final).
@@ -78,15 +78,17 @@ moments de tension forts.
 - [ ] Validé
 
 ### Q. Y a-t-il des boss / rencontres marquantes ?
-**R.** ✅ **Un boss par couche** + le **boss final**, chacun enseignant une facette du jeu :
-- **🏺 Antiquité — « le Roi des Galeries »** (humain, chef des pilleurs) : mêlée lourde, invoque des sbires par vagues, déclenche les **pièges anciens** de l'arène. *Phase 2 : enrage.* → gestion de la foule + esquive.
-- **🏰 Médiéval — « le Seigneur des Cryptes »** (humain, chef de faction) : tanky en armure, charges, appelle des **arbalétriers**. *Phase 2 : brise les piliers → chutes & obscurité.* → ciblage prioritaire & lumière.
-- **⚙️ Industriel — « LÉVIATHAN »** (automate de guerre, vestige d'une IA *perdante*) : gros **dégâts à distance** (canons, missiles), attaques de zone, **blindage à percer** (points faibles). *Phase 2 : se déchaîne.* → munitions & couverture.
+**R.** ✅ **Un boss par zone** + le **boss final**, chacun enseignant une facette du jeu.
+Les deux boss humains sont des **chefs de factions de survivants actuels** (plus de référence
+d'époque) ; le design de combat est conservé :
+- **🚇 Transit — « le Roi des Galeries »** (humain, chef de la faction des **pilleurs des tunnels**) : mêlée lourde, invoque des sbires par vagues, déclenche des **pièges** de l'arène. *Phase 2 : enrage.* → gestion de la foule + esquive.
+- **⚙️ Usines — « le Seigneur de la Fonderie »** (humain, chef d'une **milice technophile**) : tanky en armure, charges, appelle des **fusiliers**. *Phase 2 : brise les structures → chutes & obscurité.* → ciblage prioritaire & lumière.
+- **🛡️ Militaire/Labos — « LÉVIATHAN »** (automate de guerre, vestige d'une IA *perdante*) : gros **dégâts à distance** (canons, missiles), attaques de zone, **blindage à percer** (points faibles). *Phase 2 : se déchaîne.* → munitions & couverture.
 - **☀️ Surface — Boss final : NAPOLÉON** (nom complet **NAPOLÉON-B32 // version 4**) — l'**IA victorieuse** qui « protège » la surface. Froide, logique, presque tragique ; **elle parle** pendant le combat (expose sa logique). **Multi-phases** : commande drones/tourelles, **gaz toxiques** omniprésents (éclairage spécial requis), puis un **noyau** à détruire. → synthèse de tout le jeu.
 
-**Mini-boss optionnels** : quelques rencontres facultatives dans les couches (chefs de
+**Mini-boss optionnels** : quelques rencontres facultatives dans les zones (chefs de
 **bandits**, **automates d'élite**…), avec du **bon loot** en récompense.
-> 💡 *À détailler* : patterns précis, PV/dégâts, loot garanti de chaque boss ; liste des mini-boss.
+> 💡 *À détailler / confirmer* : noms & placement par zone des 2 boss humains (propositions ci-dessus), patterns précis, PV/dégâts, loot garanti de chaque boss ; liste des mini-boss.
 - [ ] Validé
 
 ### Q. Y a-t-il des PNJ non hostiles hors base (marchands, autres survivants) ?

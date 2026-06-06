@@ -13,13 +13,13 @@
 Après une **Troisième Guerre mondiale** menée par des IA et des drones, une **IA victorieuse**
 a achevé de dévaster la surface (gaz toxiques) et poussé l'humanité **sous terre**. Des
 générations plus tard, on a **oublié pourquoi**. On incarne un survivant qui **creuse** un
-monde fait de **couches de civilisations** pour **remonter vers la surface** — de plus en plus
+monde fait de **zones fonctionnelles successives** pour **remonter vers la surface** — de plus en plus
 dangereuse — récolter des ressources, **bâtir une base** façon Fallout Shelter, affronter
 humains et robots, et **reconstituer la vérité**.
 
 ## Piliers de design
 
-1. **Creuser & découvrir** — l'exploration libre du sous-sol, couche après couche.
+1. **Creuser & découvrir** — l'exploration libre du sous-sol, zone après zone.
 2. **Bâtir son refuge** — construire et faire vivre une base sûre dans un monde hostile.
 3. **Remonter sous tension** — chaque expédition vers le haut est plus risquée ; revenir vivant avec son butin est l'enjeu.
 
@@ -32,23 +32,24 @@ humains et robots, et **reconstituer la vérité**.
 
 - **Creuser :** terrain généré procéduralement + bunkers/caves **préfabriqués** ; outils à paliers **Pierre → Fer → Acier/Composants** (gating de l'ascension).
 - **Lumière :** vraie mécanique — torches (bois) ; **éclairage anti-pollution à crafter** près de la surface.
-- **Combat :** temps réel, **visée souris**, mêlée **ou** arme à feu, **munitions rares** (loot + craft) ; rareté = paliers de **stats** ; **légendaires** lootées sur les **boss de couche**.
+- **Combat :** temps réel, **visée souris**, mêlée **ou** arme à feu, **munitions rares** (loot + craft) ; rareté = paliers de **stats** ; **légendaires** lootées sur les **boss de zone**.
 - **Extraction :** **sac limité** ; à la mort, retour à la base et **butin récupérable** sur une cache (façon Souls). Auto-sauvegarde.
 - **Base (Fallout Shelter) :** bibliothèque de pièces (production des ressources, crafting, **bunker/défense**, stockage, infirmerie, dortoir) + **PNJ autonomes** ; **raids réguliers** à repousser.
 - **Ressources (AoE) :** Bois (build + torches) · Lithium (recharge lampe frontale) · Pierre (build) · Fer (équipement) · Or (monnaie) · Eau & Nourriture (soin).
 - **Progression :** équipement (loot/craft) + outils de creusage + **compétences du héros à l'usage**.
 
-## Monde — 3 couches + Surface (on remonte le temps)
+## Monde — 3 zones jouables + Foyer + Surface (on remonte vers la surface)
 
-| Zone | Époque | Menace | Boss |
+| Zone | Fonction | Menace | Boss |
 |------|--------|--------|------|
-| ⛟ **Foyer** | Moderne (refuge, départ) | — (sûr) | — |
-| 🏺 **Antiquité** | la plus ancienne | Pilleurs (humains) | le Roi des Galeries |
-| 🏰 **Médiéval** | — | Factions, bandits | le Seigneur des Cryptes |
-| ⚙️ **Industriel** | — | Robots, gaz | LÉVIATHAN |
-| ☀️ **Surface** | Présent / catastrophe | Tout (climax) | **NAPOLÉON** *(l'IA)* |
+| ⛟ **Foyer** | refuge (départ, le plus profond) | — (sûr) | — |
+| 🚇 **Transit** | tunnels / infrastructure | Pilleurs (humains) | le Roi des Galeries |
+| ⚙️ **Usines** | production autonome | Robots, milices, gaz | le Seigneur de la Fonderie |
+| 🛡️ **Militaire / Labos** | commandement / IA | Robots avancés, défenses | LÉVIATHAN |
+| ☀️ **Surface** | présent / catastrophe | Tout (climax) | **NAPOLÉON** *(l'IA)* |
 
-Profond = ancien ; la menace **monte** avec l'altitude (humains en bas, robots en haut).
+La menace **monte** avec l'altitude : factions humaines en bas, machines/robots en haut
+(on se **rapproche de l'IA** en remontant).
 
 ## Héros
 
