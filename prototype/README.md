@@ -74,6 +74,12 @@ godot --editor --path prototype
   visé à la souris (traceur, s'arrête au mur ou au robot touché, ~2 balles), **munitions
   limitées** consommées par tir et **lâchées en partie par les robots** (boucle loot, façon
   Metro où chaque balle compte). 🟡
+- **Jalon 6 — réorientation : des profondeurs vers la surface** : on **part de la profondeur**
+  (la **base est en bas**, zone calme) et l'**objectif est de REMONTER à la surface** (zone
+  **hostile** = climax). Les **robots se densifient vers la surface** (gradient de danger : peu
+  en bas, beaucoup en haut) ; la **barrière de roche dense** (outil Fer) se franchit désormais
+  **en montant**. Victoire = rejoindre la **SORTIE** (balise jaune en surface, colonne centrale).
+  Conforme à la vision finale du jeu (l'inversion artefact→base de J4 est remplacée). 🟡
 - Tout est piloté par `scripts/Game.gd` ; les **valeurs réglables** (vitesse de creusage,
   gravité, saut, portée, **rayon/portée de lumière**…) sont en haut du script.
 

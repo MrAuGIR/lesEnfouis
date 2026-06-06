@@ -96,9 +96,11 @@ const ENEMY_AMMO_CHANCE := 0.6   # probabilité qu'un robot lâche des munitions
 
 # --- Objectif (Jalon 4) -----------------------------------------------------
 const HARD_MULT := 4.5            # creusage de la roche dense (très lent)
-const BAND_TOP := AIR_ROWS + 50   # profondeur de la barrière de roche dense
+# Orientation (J6) : on PART de la profondeur (base sûre) et on REMONTE vers la surface (climax).
+const BASE_DEPTH := AIR_ROWS + 58 # profondeur de la base / point de départ (zone calme)
+const BAND_TOP := AIR_ROWS + 30   # barrière de roche dense ENTRE la base et la surface (gate : outil Fer)
 const BAND_H := 4                 # épaisseur de la barrière (tuiles)
-const ARTEFACT_Y := AIR_ROWS + 60 # profondeur de l'artefact (sous la barrière)
+const EXIT_HALF := 4              # demi-largeur de la zone de SORTIE en surface (tuiles)
 
 # Types de tuile
 const EMPTY := 0
@@ -232,15 +234,16 @@ func _generate_world() -> void:
 	_place_objective()
 
 func _place_objective() -> void:
-	# Barrière de roche dense (gate : outil Fer requis) + artefact dessous.
+	# Barrière de roche dense (gate : outil Fer requis) à franchir pour remonter vers la surface.
 	for x in GRID_W:
 		for y in range(BAND_TOP, BAND_TOP + BAND_H):
 			grid[y * GRID_W + x] = HARDROCK
+	# Dégage la colonne de sortie en surface (zone de SORTIE = objectif).
 	var cx := int(GRID_W * 0.5)
-	for yy in range(ARTEFACT_Y - 1, ARTEFACT_Y + 2):
-		for xx in range(cx - 2, cx + 3):
+	for xx in range(cx - EXIT_HALF, cx + EXIT_HALF + 1):
+		var top := surface[clampi(xx, 0, GRID_W - 1)]
+		for yy in range(top, top + 2):
 			grid[yy * GRID_W + xx] = EMPTY
-	grid[ARTEFACT_Y * GRID_W + cx] = ARTEFACT
 
 func _place_structures() -> void:
 	# Bunkers abandonnés : petites salles en béton contenant du bois (seule source).
@@ -250,9 +253,11 @@ func _place_structures() -> void:
 		var x0 := randi_range(2, GRID_W - w - 2)
 		var y0 := randi_range(AIR_ROWS + 14, GRID_H - h - 2)
 		_carve_structure(x0, y0, w, h)
-	# Un bunker garanti juste sous le point de départ (pour amorcer la partie)
+	# Base profonde : salle sûre garantie au point de départ + un bunker de bois accolé
+	# (amorce le craft : on doit pouvoir poser l'atelier AVANT de franchir la barrière).
 	var cx := int(GRID_W * 0.5)
-	_carve_structure(cx - 4, surface[cx] + 8, 9, 5)
+	_carve_structure(cx - 4, BASE_DEPTH - 3, 9, 6)
+	_carve_structure(cx + 7, BASE_DEPTH - 3, 7, 5)
 
 func _carve_structure(x0: int, y0: int, w: int, h: int) -> void:
 	for y in range(y0, y0 + h):
@@ -265,8 +270,9 @@ func _carve_structure(x0: int, y0: int, w: int, h: int) -> void:
 		grid[floor_y * GRID_W + x] = WOOD
 
 func _spawn_player() -> void:
+	# On démarre EN PROFONDEUR, dans la salle de la base (la gravité pose le héros au sol).
 	var cx := int(GRID_W * 0.5)
-	pos = Vector2(cx * TILE + TILE * 0.5, (surface[cx] - 1) * TILE)
+	pos = Vector2(cx * TILE + TILE * 0.5, (BASE_DEPTH - 2) * TILE)
 
 func _make_camera() -> void:
 	camera = Camera2D.new()
@@ -308,11 +314,9 @@ func _update_hud() -> void:
 	if cache_active:
 		bagline += "     >> CACHE a recuperer <<"
 	var base_line := "Base: Production[%s]  Atelier[%s]  Outil: %s" % ["ON" if has_prod else "-", "ON" if has_workshop else "-", TIER_NAMES[dig_level]]
-	var obj := "Objectif: descendre chercher l'Artefact (roche dense profonde = outil Fer)"
+	var obj := "Objectif: REMONTER a la surface (barriere de roche dense = outil Fer)"
 	if won:
-		obj = "*** GAGNE ! Artefact rapporte a la base ***"
-	elif has_artefact:
-		obj = ">> Artefact EN MAIN -- rentre le deposer a la base ! <<"
+		obj = "*** SORTI ! Tu as rejoint la surface ***"
 	var weap := "Arme: melee" if weapon == 0 else "Arme: feu (%d mun.)" % ammo
 	var hint := "[ZQSD/Fleches] bouger/grimper  [Espace] saut  [Clic G] creuser  [Clic D] attaquer  [Molette/X] arme  [I] inventaire  [F] echelle  [R] lampe  [T] torche  [E] deposer  [Q] retirer  [K] mort"
 	if _near_base():
@@ -330,7 +334,7 @@ func _process(delta: float) -> void:
 	_update_aim()
 	_deplete_lamp(delta)
 	_produce(delta)
-	_check_artefact()
+	_check_exit()
 	_update_combat(delta)
 	_handle_dig(delta)
 	_update_flashes(delta)
@@ -501,19 +505,16 @@ func _place_ladder() -> void:
 		_flash_msg("Echelle : rien a poser (pas de place ou pas de bois)")
 	_update_hud()
 
-func _check_artefact() -> void:
-	if has_artefact:
+func _check_exit() -> void:
+	# Victoire : rejoindre la SORTIE en surface (zone centrale, au niveau du sol ou au-dessus).
+	if won:
 		return
-	var x0 := int((pos.x - half.x) / TILE)
-	var x1 := int((pos.x + half.x) / TILE)
-	var y0 := int((pos.y - half.y) / TILE)
-	var y1 := int((pos.y + half.y) / TILE)
-	for cy in range(y0, y1 + 1):
-		for cx in range(x0, x1 + 1):
-			if _tile(cx, cy) == ARTEFACT:
-				grid[cy * GRID_W + cx] = EMPTY
-				has_artefact = true
-				_flash_msg("Artefact recupere ! Rentre le deposer a la base.")
+	var cx := int(GRID_W * 0.5)
+	var tx := int(pos.x / TILE)
+	var ty := int((pos.y + half.y) / TILE)   # niveau des pieds
+	if absi(tx - cx) <= EXIT_HALF and ty <= surface[clampi(tx, 0, GRID_W - 1)]:
+		won = true
+		_flash_msg("*** SORTI ! Tu as rejoint la surface. Bravo ! ***")
 
 func _damage(amount: float) -> void:
 	hp = maxf(0.0, hp - amount)
@@ -546,10 +547,6 @@ func _deposit() -> void:
 		_store_add(t, _bag_count(t))
 	_bag_clear()
 	hp = MAX_HP   # on se soigne à la base
-	if has_artefact:
-		has_artefact = false
-		won = true
-		_flash_msg("*** OBJECTIF ATTEINT ! Artefact rapporte a la base. Bravo ! ***")
 	_update_hud()
 
 func _withdraw() -> void:
@@ -658,22 +655,26 @@ func _upgrade_tool() -> void:
 # --- Combat (J5a : mêlée) ---------------------------------------------------
 func _spawn_enemies() -> void:
 	enemies = []
-	# Rencontre garantie pour amorcer le combat : un robot dans le bunker de départ
-	# (juste sous le spawn), facile à trouver dès la première descente.
-	var cx := int(GRID_W * 0.5)
-	_add_enemy(Vector2((cx + 2) * TILE + TILE * 0.5, (surface[cx] + 10) * TILE + TILE * 0.5))
-	# Le reste dispersé dans les cavernes du sous-sol.
+	# Gradient de danger : la PROFONDEUR (près de la base) est calme, la SURFACE est hostile.
+	# On place les robots dans la bande de jeu (surface → base), avec une densité qui croît
+	# vers le haut : la pression monte au fur et à mesure qu'on remonte vers la sortie.
 	var tries := 0
-	while enemies.size() < ENEMY_COUNT and tries < 3000:
+	while enemies.size() < ENEMY_COUNT and tries < 6000:
 		tries += 1
 		var tx := randi_range(4, GRID_W - 5)
-		var ty := randi_range(AIR_ROWS + 16, GRID_H - 4)
+		var top := surface[clampi(tx, 0, GRID_W - 1)]
+		var ty := randi_range(top + 2, BASE_DEPTH - 2)
 		# une case vide avec du sol dessous et de la place au-dessus (tête)
 		if _tile(tx, ty) != EMPTY or _tile(tx, ty - 1) != EMPTY or not _is_solid(tx, ty + 1):
 			continue
+		# f = 0 en surface, 1 au niveau de la base ; on garde surtout les spawns peu profonds.
+		var f := clampf(float(ty - top) / float(BASE_DEPTH - top), 0.0, 1.0)
+		var keep := 1.0 - f
+		if randf() > keep * keep:   # courbe au carré → concentre les robots vers la surface
+			continue
 		var p := Vector2(tx * TILE + TILE * 0.5, ty * TILE + TILE * 0.5)
-		if p.distance_to(base_pos) < 10.0 * TILE:
-			continue   # petite zone de répit autour de la base
+		if p.distance_to(base_pos) < 12.0 * TILE:
+			continue   # zone de répit autour de la base profonde
 		_add_enemy(p)
 
 func _add_enemy(p: Vector2) -> void:
@@ -1347,11 +1348,16 @@ func _draw() -> void:
 			var frac: float = clampf(float(e["hp"]) / ENEMY_HP, 0.0, 1.0)
 			draw_rect(Rect2(ep + Vector2(-ENEMY_HALF.x, -ENEMY_HALF.y - 5.0), Vector2(w, 2)), Color(0.25, 0.0, 0.0))
 			draw_rect(Rect2(ep + Vector2(-ENEMY_HALF.x, -ENEMY_HALF.y - 5.0), Vector2(w * frac, 2)), Color(0.95, 0.25, 0.25))
-	# Base (dépôt, à la surface) et cache de butin (à la mort)
+	# Base (dépôt, en profondeur) et cache de butin (à la mort)
 	draw_circle(base_pos, BASE_RANGE, Color(0.3, 0.9, 0.4, 0.08))
 	draw_rect(Rect2(base_pos + Vector2(-9, -3), Vector2(18, 6)), Color(0.3, 0.85, 0.4))
 	# Pièces construites (avec étiquettes)
 	var font := ThemeDB.fallback_font
+	# Sortie (objectif) : balise en surface, colonne centrale (toujours visible, façon repère)
+	var ex := int(GRID_W * 0.5)
+	var exit_p := Vector2(ex * TILE + TILE * 0.5, surface[ex] * TILE)
+	draw_rect(Rect2(exit_p + Vector2(-EXIT_HALF * TILE, -3), Vector2(EXIT_HALF * 2 * TILE, 3)), Color(0.95, 0.85, 0.3, 0.85))
+	draw_string(font, exit_p + Vector2(-14, -6), "SORTIE", HORIZONTAL_ALIGNMENT_LEFT, -1, 8, Color(1.0, 0.95, 0.55))
 	draw_string(font, base_pos + Vector2(-12, -7), "BASE", HORIZONTAL_ALIGNMENT_LEFT, -1, 7, Color(0.6, 1.0, 0.7))
 	if has_prod:
 		var pr := base_pos + Vector2(-3.6 * TILE, -2.0 * TILE)

@@ -84,4 +84,7 @@ les armes ne se dégradent pas.
 perdre son butin en mourant ; **récompense** = ressources rares, technologies anciennes des
 couches, et l'extension/sécurisation de sa base.
 > 💡 *À confirmer/affiner.*
+> 📝 *Prototypé au jalon J6 (juin 2026) : base en profondeur (calme) → objectif remonter à*
+> *une surface hostile ; **densité de robots croissante vers le haut** + butin largué en cache*
+> *à la mort. À valider en playtest : est-ce que « remonter sous pression » est fun ?*
 - [ ] Validé
