@@ -32,10 +32,10 @@ const REACH := 3.5 * TILE   # portée de creusage autour du héros
 const LAMP_AMBIENT_CORE := 1.2   # tuiles : plein autour du corps
 const LAMP_AMBIENT_RADIUS := 3.2 # tuiles : portée du halo de corps
 const LAMP_AMBIENT_MAX := 0.75   # le halo de corps est un peu moins fort que le faisceau
-const LAMP_BEAM_CORE := 2.5      # tuiles : plein au départ du faisceau
-const LAMP_BEAM_RANGE := 9.5     # tuiles : portée du faisceau
-const LAMP_COS_INNER := 0.94     # cos(~20°) : cœur du faisceau
-const LAMP_COS_OUTER := 0.55     # cos(~57°) : bord du faisceau
+const LAMP_BEAM_CORE := 3.0      # tuiles : plein au départ du faisceau
+const LAMP_BEAM_RANGE := 14.0    # tuiles : portée du faisceau (cône plus long)
+const LAMP_COS_INNER := 0.90     # cos(~26°) : cœur du faisceau (un peu plus large)
+const LAMP_COS_OUTER := 0.45     # cos(~63°) : bord du faisceau (cône plus large)
 const SKY_FADE := 14.0      # profondeur sur laquelle la lumière du jour décline
 const SKY_STRENGTH := 1.0   # intensité de la lumière du jour en surface
 const AMBIENT_MIN := 0.05   # luminosité minimale (le noir n'est jamais total)
@@ -256,7 +256,7 @@ func _place_structures() -> void:
 	# Base profonde : salle sûre garantie au point de départ + un bunker de bois accolé
 	# (amorce le craft : on doit pouvoir poser l'atelier AVANT de franchir la barrière).
 	var cx := int(GRID_W * 0.5)
-	_carve_structure(cx - 4, BASE_DEPTH - 3, 9, 6)
+	_carve_structure(cx - 4, BASE_DEPTH - 4, 9, 7)   # salle haute (garde au plafond pour le spawn)
 	_carve_structure(cx + 7, BASE_DEPTH - 3, 7, 5)
 
 func _carve_structure(x0: int, y0: int, w: int, h: int) -> void:
@@ -270,9 +270,10 @@ func _carve_structure(x0: int, y0: int, w: int, h: int) -> void:
 		grid[floor_y * GRID_W + x] = WOOD
 
 func _spawn_player() -> void:
-	# On démarre EN PROFONDEUR, dans la salle de la base (la gravité pose le héros au sol).
+	# On démarre EN PROFONDEUR, posé sur le plancher de la base (pieds sur le bois en BASE_DEPTH+1,
+	# tête dégagée du plafond pour éviter toute éjection au spawn).
 	var cx := int(GRID_W * 0.5)
-	pos = Vector2(cx * TILE + TILE * 0.5, (BASE_DEPTH - 2) * TILE)
+	pos = Vector2(cx * TILE + TILE * 0.5, (BASE_DEPTH + 1) * TILE - half.y)
 
 func _make_camera() -> void:
 	camera = Camera2D.new()
@@ -281,6 +282,8 @@ func _make_camera() -> void:
 	camera.position_smoothing_speed = 8.0
 	add_child(camera)
 	camera.make_current()
+	camera.global_position = pos        # cadrage immédiat sur le héros (pas de panoramique au démarrage)
+	camera.reset_smoothing()
 
 func _make_hud() -> void:
 	var layer := CanvasLayer.new()
@@ -1266,7 +1269,6 @@ func _draw() -> void:
 	var c_lith := Color(0.45, 0.74, 0.80)
 	var c_wall := Color(0.30, 0.34, 0.42)
 	var c_hard := Color(0.18, 0.20, 0.26)
-	var c_lamp := Color(1.0, 0.85, 0.55)
 	var ptx := int(pos.x / TILE)
 	var pty := int(pos.y / TILE)
 	var rx := 34
@@ -1281,14 +1283,16 @@ func _draw() -> void:
 			var rect := Rect2(tx * TILE, ty * TILE, TILE, TILE)
 			var t := _tile(tx, ty)
 			if t == EMPTY:
-				# Halo de la lampe / des torches / du jour, visibles dans le vide
+				# Lueur dans l'air : haze douce qui rend le faisceau visible SANS recouvrir le
+				# décor (courbe glow² → concentrée sur le cœur du faisceau, presque blanche).
 				var glow := maxf(_lamp_light(tx, ty), _torch_light(tx, ty))
 				if glow > 0.02:
-					draw_rect(rect, Color(c_lamp.r, c_lamp.g, c_lamp.b, glow * 0.22))
+					var g := glow * glow
+					draw_rect(rect, Color(1.0, 0.94, 0.80, g * 0.14))
 				elif ty < surface[clampi(tx, 0, GRID_W - 1)] + 2:
 					var sky := _sky_light(tx, ty)
 					if sky > 0.02:
-						draw_rect(rect, Color(0.5, 0.6, 0.7, sky * 0.10))
+						draw_rect(rect, Color(0.55, 0.65, 0.78, sky * 0.10))
 				continue
 			if t == ARTEFACT:
 				var ba := _brightness(tx, ty)
@@ -1372,7 +1376,7 @@ func _draw() -> void:
 		draw_circle(cache_pos, CACHE_RANGE, Color(0.95, 0.75, 0.25, 0.16))
 		draw_rect(Rect2(cache_pos + Vector2(-4, -4), Vector2(8, 8)), Color(0.95, 0.8, 0.3))
 	# Halo central + héros (le héros porte la lumière ; le halo faiblit avec le carburant)
-	draw_circle(pos, LAMP_AMBIENT_CORE * TILE, Color(c_lamp.r, c_lamp.g, c_lamp.b, 0.10 * lamp_factor))
+	draw_circle(pos, LAMP_AMBIENT_CORE * TILE, Color(1.0, 0.93, 0.78, 0.07 * lamp_factor))
 	draw_rect(Rect2(pos - half, half * 2.0), Color(0.95, 0.85, 0.5))
 	draw_rect(Rect2(pos - half, half * 2.0), Color(0.2, 0.15, 0.05, 0.8), false, 1.0)
 	# Arc de coup (feedback du clic droit, mêlée)
