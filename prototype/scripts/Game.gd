@@ -102,6 +102,16 @@ const BAND_TOP := AIR_ROWS + 30   # barrière de roche dense ENTRE la base et la
 const BAND_H := 4                 # épaisseur de la barrière (tuiles)
 const EXIT_HALF := 4              # demi-largeur de la zone de SORTIE en surface (tuiles)
 
+# --- Gaz toxique de surface (climax, J7) ------------------------------------
+# Près de la surface, des gaz de pollution infligent des dégâts continus (DoT).
+# On s'en protège avec un éclairage anti-pollution : activable (touche M), il
+# rend IMMUNISÉ tant qu'il reste des cartouches, craftées à l'atelier (touche 4).
+# Chaque seconde passée dans le gaz consomme la protection (charges limitées).
+const GAS_FLOOR_ROW := AIR_ROWS + 20  # tuiles AU-DESSUS de cette rangée = zone de gaz
+const GAS_DPS := 9.0                  # PV/s perdus dans le gaz sans protection
+const ANTIPOL_PER_CHARGE := 25.0      # secondes de protection par cartouche craftée
+const COST_ANTIPOL := {"lithium": 5, "wood": 3}  # coût d'une cartouche (atelier)
+
 # Types de tuile
 const EMPTY := 0
 const DIRT := 1
@@ -136,6 +146,11 @@ var inv_open := false     # l'écran d'inventaire est-il ouvert ?
 var lamp_fuel := LAMP_AUTONOMY    # carburant restant (secondes)
 var lamp_factor := 1.0            # 0..1 : intensité de la lampe selon le carburant
 var torches: Array[Vector2i] = [] # torches posées (sécurisent un chemin)
+
+# Gaz toxique (J7) : protection anti-pollution = pool de secondes (cartouches).
+var antipol_fuel := 0.0           # secondes de protection restantes
+var antipol_on := false           # éclairage anti-pollution activé ?
+var was_in_gas := false           # pour signaler l'entrée dans la zone de gaz
 
 var hp := MAX_HP
 # Stock de départ — CONFORT DE TEST (prototype) : permet de construire/améliorer
@@ -175,6 +190,7 @@ var flashes := []   # éclats de creusage : {cell:Vector2i, t:float}
 
 var camera: Camera2D
 var hud: Label
+var hint_label: Label   # raccourcis (petite police, en bas de l'écran)
 var msg_label: Label
 var msg_t := 0.0
 var inv_ui: Control
@@ -292,10 +308,17 @@ func _make_hud() -> void:
 	hud.position = Vector2(12, 8)
 	hud.add_theme_color_override("font_color", Color(0.85, 0.9, 0.8))
 	layer.add_child(hud)
+	# Message de résultat d'action (sous le bloc stats, au-dessus des raccourcis)
 	msg_label = Label.new()
-	msg_label.position = Vector2(12, 142)
+	msg_label.position = Vector2(12, 116)
 	msg_label.add_theme_color_override("font_color", Color(1.0, 0.92, 0.45))
 	layer.add_child(msg_label)
+	# Raccourcis : petite police, ancrés en bas de l'écran (960x540)
+	hint_label = Label.new()
+	hint_label.add_theme_font_size_override("font_size", 9)
+	hint_label.add_theme_color_override("font_color", Color(0.62, 0.68, 0.62))
+	hint_label.position = Vector2(12, 522)
+	layer.add_child(hint_label)
 	# Calque d'inventaire (plein écran, masqué par défaut)
 	inv_ui = preload("res://scripts/InvUI.gd").new()
 	inv_ui.game = self
@@ -320,11 +343,16 @@ func _update_hud() -> void:
 	var obj := "Objectif: REMONTER a la surface (barriere de roche dense = outil Fer)"
 	if won:
 		obj = "*** SORTI ! Tu as rejoint la surface ***"
+	elif _in_gas():
+		obj += ("   [GAZ: protege]" if (antipol_on and antipol_fuel > 0.0) else "   !! GAZ TOXIQUE : -PV !!")
 	var weap := "Arme: melee" if weapon == 0 else "Arme: feu (%d mun.)" % ammo
-	var hint := "[ZQSD/Fleches] bouger/grimper  [Espace] saut  [Clic G] creuser  [Clic D] attaquer  [Molette/X] arme  [I] inventaire  [F] echelle  [R] lampe  [T] torche  [E] deposer  [Q] retirer  [K] mort"
+	var antigas := "Anti-gaz: %s (%d)" % ["ON" if antipol_on else "off", _antipol_charges()]
+	var hint := "[ZQSD/Fleches] bouger/grimper  [Espace] saut  [Clic G] creuser  [Clic D] attaquer  [Molette/X] arme  [I] inventaire  [F] echelle  [R] lampe  [T] torche  [M] anti-gaz  [E] deposer  [Q] retirer  [K] mort"
 	if _near_base():
-		hint = "BASE >  [1] Production (12 roche/8 bois)   [2] Atelier (15 roche/6 bois)   [3] Ameliorer outil   [I] inventaire  [E] deposer  [Q] retirer"
-	hud.text = "%s\nPV: %d/%d    %s\nSac    - Li:%d  Bois:%d  Terre:%d  Roche:%d\nBase   - Li:%d  Bois:%d  Terre:%d  Roche:%d\nLampe: %d%%   Torches: %d   %s   |   %s\n%s" % [obj, int(hp), int(MAX_HP), bagline, _bag_count(LITHIUM), _bag_count(WOOD), _bag_count(DIRT), _bag_count(ROCK), store_lithium, store_wood, store_dirt, store_rock, int(lamp_fuel / LAMP_AUTONOMY * 100.0), torches.size(), weap, base_line, hint]
+		hint = "BASE >  [1] Production (12 roche/8 bois)   [2] Atelier (15 roche/6 bois)   [3] Ameliorer outil   [4] Cartouche anti-gaz (5 Li/3 bois)   [I] inventaire  [E] deposer  [Q] retirer"
+	hud.text = "%s\nPV: %d/%d    %s\nSac    - Li:%d  Bois:%d  Terre:%d  Roche:%d\nBase   - Li:%d  Bois:%d  Terre:%d  Roche:%d\nLampe: %d%%   Torches: %d   %s   |   %s   |   %s" % [obj, int(hp), int(MAX_HP), bagline, _bag_count(LITHIUM), _bag_count(WOOD), _bag_count(DIRT), _bag_count(ROCK), store_lithium, store_wood, store_dirt, store_rock, int(lamp_fuel / LAMP_AUTONOMY * 100.0), torches.size(), antigas, weap, base_line]
+	if hint_label:
+		hint_label.text = hint
 
 # --- Boucle -----------------------------------------------------------------
 func _physics_process(delta: float) -> void:
@@ -338,6 +366,7 @@ func _process(delta: float) -> void:
 	_deplete_lamp(delta)
 	_produce(delta)
 	_check_exit()
+	_update_gas(delta)
 	_update_combat(delta)
 	_handle_dig(delta)
 	_update_flashes(delta)
@@ -368,6 +397,54 @@ func _deplete_lamp(delta: float) -> void:
 	lamp_fuel = maxf(0.0, lamp_fuel - delta)
 	lamp_factor = clampf(lamp_fuel / LAMP_LOW, 0.0, 1.0)
 
+# --- Gaz toxique de surface -------------------------------------------------
+func _in_gas() -> bool:
+	return int(floor(pos.y / TILE)) < GAS_FLOOR_ROW
+
+func _antipol_charges() -> int:
+	return int(ceil(antipol_fuel / ANTIPOL_PER_CHARGE))
+
+func _toggle_antipol() -> void:
+	if antipol_fuel <= 0.0:
+		antipol_on = false
+		_flash_msg("Aucune cartouche anti-gaz (craft a l'atelier : touche 4)")
+		return
+	antipol_on = not antipol_on
+	_flash_msg("Anti-pollution : %s" % ("ACTIVE" if antipol_on else "coupe"))
+
+func _craft_antipol() -> void:
+	if not _near_base():
+		_flash_msg("Approche-toi de la base (zone verte)")
+		return
+	if not has_workshop:
+		_flash_msg("Atelier requis pour crafter (touche 2)")
+		return
+	if not _can_pay(COST_ANTIPOL):
+		_flash_msg("Pas assez en base : il faut 5 lithium + 3 bois")
+		return
+	_pay(COST_ANTIPOL)
+	antipol_fuel += ANTIPOL_PER_CHARGE
+	_flash_msg("Cartouche anti-gaz craftee (%d). Activer : touche M." % _antipol_charges())
+	_update_hud()
+
+func _update_gas(delta: float) -> void:
+	var in_gas := _in_gas()
+	var protected := false
+	if in_gas and antipol_on and antipol_fuel > 0.0:
+		antipol_fuel = maxf(0.0, antipol_fuel - delta)
+		protected = true
+		if antipol_fuel <= 0.0:
+			antipol_on = false
+			_flash_msg("Cartouches anti-gaz EPUISEES !")
+	if in_gas and not protected:
+		_damage(GAS_DPS * delta)
+	if in_gas and not was_in_gas:
+		if protected:
+			_flash_msg("Zone de gaz toxique : protection anti-pollution active")
+		else:
+			_flash_msg("!! GAZ TOXIQUE !! Active l'anti-pollution (M) ou redescends")
+	was_in_gas = in_gas
+
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_R:
@@ -390,6 +467,10 @@ func _input(event: InputEvent) -> void:
 			_toggle_inventory()
 		elif event.keycode == KEY_X or event.physical_keycode == KEY_X:
 			_swap_weapon()
+		elif event.keycode == KEY_M or event.physical_keycode == KEY_M:
+			_toggle_antipol()
+		elif event.keycode == KEY_4 or event.physical_keycode == KEY_4:
+			_craft_antipol()
 		elif event.keycode == KEY_K:
 			_damage(MAX_HP)   # mort de test
 	elif event is InputEventMouseButton and event.pressed:
@@ -1345,6 +1426,13 @@ func _draw() -> void:
 				col = c_hard
 			draw_rect(rect, Color(col.r * b, col.g * b, col.b * b))
 			draw_rect(rect, Color(0, 0, 0, 0.15 * b), false, 1.0)
+	# Voile de gaz toxique (gris-jaune) sur la zone de surface, au-dessus de GAS_FLOOR_ROW
+	var gas_top := float((pty - ry) * TILE)
+	var gas_bot := minf(float(GAS_FLOOR_ROW * TILE), float((pty + ry) * TILE))
+	if gas_bot > gas_top:
+		var gx := float((ptx - rx) * TILE)
+		var gw := float((rx * 2) * TILE)
+		draw_rect(Rect2(Vector2(gx, gas_top), Vector2(gw, gas_bot - gas_top)), Color(0.65, 0.62, 0.20, 0.16))
 	# Éclats de creusage (feedback de cassage)
 	for f in flashes:
 		var a: float = clampf(f.t / 0.18, 0.0, 1.0)
