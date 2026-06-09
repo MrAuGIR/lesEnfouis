@@ -750,20 +750,31 @@ func _collide_axis(p: Vector2, hf: Vector2, v: Vector2, is_x: bool) -> Dictionar
 			var tt := ty * TILE
 			var tb := tt + TILE
 			if l < tr and r > tl and t < tb and b > tt:
+				# Éjection par pénétration minimale (cf. _resolve_axis du héros).
 				if is_x:
-					if v.x > 0.0:
+					var pen_left := r - tl
+					var pen_right := tr - l
+					if pen_left <= pen_right:
 						p.x = tl - hf.x
-					elif v.x < 0.0:
+						if v.x > 0.0:
+							v.x = 0.0
+					else:
 						p.x = tr + hf.x
-					v.x = 0.0
+						if v.x < 0.0:
+							v.x = 0.0
 					blocked = true
 				else:
-					if v.y > 0.0:
+					var pen_up := b - tt
+					var pen_down := tb - t
+					if pen_up <= pen_down:
 						p.y = tt - hf.y
+						if v.y > 0.0:
+							v.y = 0.0
 						landed = true
-					elif v.y < 0.0:
+					else:
 						p.y = tb + hf.y
-					v.y = 0.0
+						if v.y < 0.0:
+							v.y = 0.0
 	return {"pos": p, "vel": v, "landed": landed, "blocked": blocked}
 
 func _aabb_overlap(p1: Vector2, h1: Vector2, p2: Vector2, h2: Vector2) -> bool:
@@ -914,19 +925,32 @@ func _resolve_axis(is_x: bool) -> bool:
 			var tt := ty * TILE
 			var tb := tt + TILE
 			if l < tr and r > tl and t < tb and b > tt:
+				# Direction d'éjection = pénétration minimale (géométrie), PAS le signe
+				# de la vitesse : sinon une tête plantée dans un plafond pendant qu'on
+				# tombe (vel.y>0) éjectait vers le HAUT = tunnelisation à travers le solide.
 				if is_x:
-					if vel.x > 0.0:
-						pos.x = tl - half.x
-					elif vel.x < 0.0:
-						pos.x = tr + half.x
-					vel.x = 0.0
+					var pen_left := r - tl    # profondeur d'enfoncement par la gauche
+					var pen_right := tr - l   # ... par la droite
+					if pen_left <= pen_right:
+						pos.x = tl - half.x   # repoussé vers la gauche (mur à droite)
+						if vel.x > 0.0:
+							vel.x = 0.0
+					else:
+						pos.x = tr + half.x   # repoussé vers la droite (mur à gauche)
+						if vel.x < 0.0:
+							vel.x = 0.0
 				else:
-					if vel.y > 0.0:
-						pos.y = tt - half.y
+					var pen_up := b - tt      # pieds enfoncés dans une tuile en dessous
+					var pen_down := tb - t    # tête enfoncée dans une tuile au-dessus
+					if pen_up <= pen_down:
+						pos.y = tt - half.y   # posé sur la tuile (sol)
+						if vel.y > 0.0:
+							vel.y = 0.0
 						landed = true
-					elif vel.y < 0.0:
-						pos.y = tb + half.y
-					vel.y = 0.0
+					else:
+						pos.y = tb + half.y   # repoussé sous la tuile (plafond)
+						if vel.y < 0.0:
+							vel.y = 0.0
 	return landed
 
 # --- Creusage ---------------------------------------------------------------
