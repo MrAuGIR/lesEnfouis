@@ -68,9 +68,9 @@ douce-amère :** le héros rapporte la **vérité**, l'humanité **retrouve sa m
 
 ## Direction artistique & audio
 
-Pixel art coloré, **palette signature par couche**, UI **rétro-futuriste / terminal**,
-lumière au cœur de l'ambiance. **Audio** immersif + musique adaptative (tension au
-combat/raid, chaleur à la base).
+Pixel art coloré, **palette signature par zone**, UI **rétro-futuriste / terminal**,
+lumière au cœur de l'ambiance. **Audio : le sound design d'abord** (nappes/SFX façon Metro,
+musique rare aux moments forts) ; **aucun doublage** (texte + vocalises, NAPOLÉON inclus).
 
 ## Périmètre
 
