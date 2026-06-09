@@ -25,7 +25,7 @@
 Les zones **Usines / Militaire-Labos / Surface** et leurs boss arrivent **après le MVP**, par lots.
 > 💡 *Pourquoi cet ordre* : le risque n°1 (fun creuser/extraire) se prouve **avant** de
 > produire combat & contenu. Maintenant qu'il est levé, on bâtit le MVP 1-zone.
-- [ ] Validé
+- [x] Validé
 
 ### Q. Qu'est-ce qui est explicitement HORS périmètre (au moins au début) ?
 **R.** ✅ Repoussé après le premier jeu (MVP) : **multijoueur / coop**, **portage console** (PC
@@ -33,16 +33,16 @@ d'abord), **les zones au-delà de Transit** (Usines / Militaire-Labos / Surface 
 les **factions / quêtes complexes** (garder marchands + bandits simples). Le **MVP se limite à
 1 zone jouable (Transit) + son boss** ; combat / raids / boss au-delà arrivent **par lots
 ensuite**. Le **prototype/vertical slice**, lui, excluait déjà combat/raids/boss (preuve du cœur).
-- [ ] Validé
+- [x] Validé
 
 ### Q. Quels sont les grands chantiers techniques/de contenu pressentis ?
-**R.** 🟡 Pressentis (la techno n'est PAS choisie ici, mais ces systèmes cadrent l'effort) :
+**R.** ✅ Pressentis (la techno n'est PAS choisie ici, mais ces systèmes cadrent l'effort) :
 **terrain creusable en tuiles + génération procédurale** des couches, **placement de
 préfabriqués** (bunkers/caves), **système de pièces de base + PNJ autonomes**, **inventaire
 + extraction** (sac limité, cache au sol), puis **combat** (visée souris, armes à rareté) et
 **raids**. Contenu : assets **pixel art** par couche, bibliothèque de pièces.
 > 💡 *À affiner* au moment de la production.
-- [ ] Validé
+- [x] Validé
 
 ### Q. Quels sont les principaux risques et hypothèses à tester en prototype ?
 **R.** ✅ **Risque n°1 (à prototyper en premier) : le fun du creusage + extraction** — le
@@ -55,8 +55,9 @@ contenu (couches, pièces, pixel art).
 > objectif Artefact). Verdict joueur : **« creuser et extraire est plus fun »** une fois
 > l'**inventaire à slots** (piles + transfert choisi sac↔base) en place — c'était le frein
 > ergonomique. Feu vert pour la **production** (combat, contenu, art final).
-- [ ] Validé
+- [x] Validé
 
 ### Q. Quel modèle économique / de distribution ?
-**R.** ✅ **Achat unique premium** sur **PC** (Steam/itch), sans microtransactions.
-- [ ] Validé
+**R.** ✅ **Achat unique premium** sur **PC** (Steam/itch), **sans microtransactions**. Pas
+de DLC engagé pour l'instant (extensions de contenu = piste éventuelle post-lancement, non figée).
+- [x] Validé
