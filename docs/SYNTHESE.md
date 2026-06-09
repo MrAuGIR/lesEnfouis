@@ -74,10 +74,12 @@ combat/raid, chaleur à la base).
 
 ## Périmètre
 
-**MVP = vertical slice** : prouver le cœur **creuser → récolter → base minimale →
-revenir/extraire**, *sans* combat/raids/boss. **Hors périmètre initial :** multijoueur,
-portage console, factions/quêtes complexes, couches au-delà de 1-2. **Risque n°1 à
-prototyper :** le fun du creusage + extraction.
+Deux jalons : (1) **prototype / vertical slice** — prouver le cœur **creuser → récolter →
+base minimale → revenir/extraire**, *sans* combat/raids/boss (**risque n°1, levé en proto**) ;
+(2) **MVP = premier jeu complet** — **Foyer + 1 zone (Transit) + son boss**, boucle entière
+(combat, raids, base, extraction) sur une seule zone. **Hors périmètre initial :** multijoueur,
+portage console, factions/quêtes complexes, zones au-delà de Transit (Usines/Militaire/Surface
+= post-MVP).
 
 ---
 *Détail complet par section dans les fichiers `00`–`08` de ce dossier.*

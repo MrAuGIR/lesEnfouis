@@ -13,7 +13,7 @@ préfabriquées** placées dans le monde généré. Échelle visée : **3 zones 
 + Surface), très denses** et identitaires.
 > 💡 *À détailler* : taille/épaisseur d'une couche, transitions entre couches, densité des
 > bunkers, part d'aléatoire dans le placement des préfabriqués.
-- [ ] Validé
+- [x] Validé
 
 ### Q. Quelle est l'identité de chaque zone ? (du plus profond au plus haut)
 **R.** ✅ **3 zones jouables = 3 fonctions** de l'humanité enfouie (**pas** des époques),
@@ -57,10 +57,13 @@ encadrées par le **Foyer** (départ, tout en bas) et la **Surface** (climax). L
 - **Pierre** → construction et amélioration des **pièces de base**.
 - **Fer** → **armes, outils et armures** (équipement).
 - **Or** → **monnaie / échange** (commerce — implique des marchands, cf. [03](03-personnages-ennemis.md)).
-- **Eau** & **Nourriture** → **soin / consommables** (santé du héros).
+- **Eau** & **Nourriture** → **soin / consommables** (rendent des PV au héros). **Pas de jauge
+  faim/soif** à entretenir en continu : choix de focalisation — la pression de survie vient du
+  **danger et de l'extraction** (revenir vivant avec son butin), pas de l'entretien de jauges.
+  Ce sont donc des **consommables de soin** que l'on stocke et emporte en expédition.
 > 💡 *À détailler* : sources de chaque ressource (pièce de production dédiée + récolte en
-> exploration), coûts, rareté selon la couche.
-- [ ] Validé
+> exploration), coûts, rareté selon la couche, force de soin eau vs nourriture.
+- [x] Validé
 
 ### Q. Quelles pièces dans la bibliothèque de construction de base ?
 **R.** ✅ Pièces confirmées : **production** (eau, nourriture, bois, fer, pierre, or),
@@ -69,7 +72,7 @@ l'extraction), **infirmerie** (soin du héros et des PNJ), **dortoir/quartiers**
 PNJ, fixe la capacité d'accueil). Pas de salle générateur (la lumière repose sur le
 bois/les torches, pas sur l'électricité).
 > 💡 *À détailler* : niveaux d'amélioration des pièces, coûts, prérequis de déblocage.
-- [ ] Validé
+- [x] Validé
 
 ### Q. Comment fonctionne le craft / l'équipement ?
 **R.** ✅ **Loot ET craft combinés** :
@@ -83,7 +86,7 @@ bois/les torches, pas sur l'électricité).
 - **Rareté = paliers de stats** (pas d'affixes aléatoires). Seuls les **outils de creusage s'usent** (réparer/remplacer ; le Mineur les use moins).
 > 💡 *À détailler* : valeurs chiffrées (dégâts, coûts, durabilité), liste des recettes par
 > palier d'atelier, matériaux exacts de chaque palier d'outil.
-- [ ] Validé
+- [x] Validé
 
 ### Q. Quelle est la courbe de progression (qu'est-ce qui se débloque, dans quel ordre) ?
 **R.** ✅ Progression à **double verrou** pour monter vers les couches supérieures : (1) un
@@ -94,10 +97,16 @@ compétences du héros à l'usage** (creuser, combat, craft, soin…), amorcée 
 choisi (cf. [03](03-personnages-ennemis.md)). La difficulté monte vers la surface.
 > 💡 *À détailler* : paliers d'outils (quels matériaux/niveaux ?), arbre de craft/techno,
 > quels blocs/couches exigent quel outil, déblocage des pièces de base avancées.
-- [ ] Validé
+- [x] Validé
 
 ### Q. Quel volume de contenu / quelle durée de vie vise-t-on ? (et le MVP)
-**R.** ⬜ À déterminer.
-> 💡 *À cadrer en [08](08-perimetre-production.md)* : nombre de couches, de pièces, de types
-> d'ennemis et d'objets pour un premier jeu jouable.
-- [ ] À déterminer
+**R.** ✅ **MVP du premier 'vrai jeu' jouable = le Foyer + 1 zone complète (Transit) + son
+boss** (le Roi des Galeries). Objectif : faire tourner la **boucle entière de bout en bout sur
+une zone** — creuser/explorer Transit, récolter (pierre/fer/ferraille + bois fouillé), bâtir &
+faire vivre une base au Foyer (pièces, PNJ, craft, paliers d'outils), subir des **raids**,
+affronter les **ennemis humains** et le **boss de zone**, mourir/extraire. *(Le vertical slice
+creuser→récolter→base est déjà prouvé au prototype grey-box — cf. risque n°1 levé.)* Les zones
+**Usines / Militaire-Labos / Surface** et leurs boss viennent **après** le MVP, par lots.
+> 💡 *Chiffrage détaillé (nombre de pièces, d'ennemis, d'objets, durée de vie cible) à cadrer
+> en [08](08-perimetre-production.md)* — la **portée** (1 zone) est ici figée.
+- [x] Validé

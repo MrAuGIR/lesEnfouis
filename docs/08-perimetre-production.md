@@ -9,21 +9,30 @@
 ---
 
 ### Q. Quelle est la définition du MVP (le plus petit jeu « jouable et fun ») ?
-**R.** ✅ **Vertical slice ciblé sur le cœur** : prouver d'abord UNE boucle —
-**creuser → récolter → base minimale → revenir/extraire** — **sans combat, raids ni boss**.
-1 héros (personnalisation minimale), quelques ressources, une base avec production +
-stockage, et la **tension d'extraction** (sac limité, butin perdu/récupérable). On n'ajoute
-le combat, les raids, les factions et les couches supplémentaires qu'**une fois ce cœur
-prouvé fun**.
-> 💡 *Pourquoi* : c'est le risque n°1 du projet (ci-dessous). Inutile de produire le reste
-> tant que creuser/extraire n'est pas satisfaisant.
+**R.** ✅ **Deux jalons à ne pas confondre :**
+
+1. **Prototype / vertical slice** *(preuve de risque — FAIT)* : prouver UNE boucle —
+   **creuser → récolter → base minimale → revenir/extraire** — **sans combat, raids ni boss**.
+   1 héros, quelques ressources, base production + stockage, tension d'extraction (sac limité,
+   butin perdu/récupérable). **Ce n'est pas le jeu complet**, c'est la levée du risque n°1
+   (ci-dessous). ✅ **Réalisé** (grey-box, juin 2026).
+2. **MVP = premier jeu complet jouable** : **le Foyer + 1 zone complète (Transit) + son boss**
+   (le Roi des Galeries). La **boucle entière de bout en bout sur une zone** : creuser/explorer,
+   récolter, bâtir & faire vivre la base (pièces, PNJ, craft, paliers d'outils), **raids**,
+   **ennemis humains** et **boss de zone**, mort/extraction. C'est le plus petit périmètre
+   *réellement jouable et vendable*. *(cf. [06](06-contenu-progression.md).)*
+
+Les zones **Usines / Militaire-Labos / Surface** et leurs boss arrivent **après le MVP**, par lots.
+> 💡 *Pourquoi cet ordre* : le risque n°1 (fun creuser/extraire) se prouve **avant** de
+> produire combat & contenu. Maintenant qu'il est levé, on bâtit le MVP 1-zone.
 - [ ] Validé
 
 ### Q. Qu'est-ce qui est explicitement HORS périmètre (au moins au début) ?
-**R.** ✅ Repoussé après le premier jeu : **multijoueur / coop**, **portage console** (PC
-d'abord), **toutes les couches** (se limiter à **1-2 couches** au début), et les **factions
-/ quêtes complexes** (garder marchands + bandits simples). De même, combat / raids / boss
-arrivent **après** le vertical slice.
+**R.** ✅ Repoussé après le premier jeu (MVP) : **multijoueur / coop**, **portage console** (PC
+d'abord), **les zones au-delà de Transit** (Usines / Militaire-Labos / Surface = post-MVP), et
+les **factions / quêtes complexes** (garder marchands + bandits simples). Le **MVP se limite à
+1 zone jouable (Transit) + son boss** ; combat / raids / boss au-delà arrivent **par lots
+ensuite**. Le **prototype/vertical slice**, lui, excluait déjà combat/raids/boss (preuve du cœur).
 - [ ] Validé
 
 ### Q. Quels sont les grands chantiers techniques/de contenu pressentis ?
