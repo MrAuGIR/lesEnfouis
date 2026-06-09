@@ -13,15 +13,14 @@
 la souris** (cohérent avec la visée souris du combat), raccourcis pour outils/armes/
 inventaire ; gestion de la base à la souris.
 > 💡 *À détailler* : mapping précis, bascule exploration ↔ vue base. Support manette = piste post-MVP.
-- [ ] Validé
+- [x] Validé
 
 ### Q. Qu'affiche le HUD en exploration ?
-**R.** 🟡 Proposition (style terminal rétro-futuriste, cf. [04](04-direction-artistique.md)) :
-**santé**, **sac/butin transporté** + capacité, **lampe/lumière** (autonomie), **arme/outil
-équipé + munitions**, **profondeur/couche**, et **alertes** (danger, raid sur la base).
-Minimal et lisible.
-> 💡 *À confirmer/affiner.*
-- [ ] Validé
+**R.** ✅ Style **terminal rétro-futuriste** (cf. [04](04-direction-artistique.md), planche HUD
+validée) : **santé**, **sac/butin transporté** + capacité, **lampe/lumière** (autonomie),
+**arme/outil équipé + munitions**, **profondeur/couche**, et **alertes** (danger, raid sur la
+base). **Minimal et lisible** en jeu, plus décoré au Foyer/menus.
+- [x] Validé
 
 ### Q. Comment gère-t-on l'inventaire et le butin ?
 **R.** ✅ **Sac à capacité limitée** : place restreinte → **choisir quoi rapporter** et
@@ -39,29 +38,40 @@ récupérable** sur place (façon Souls) : on peut repartir le chercher, au risq
 > un **nombre de slots** (terre = 1 slot, pas 25). Reste à concevoir pour le jeu final :
 > esthétique terminal, **hotbar**, tri auto, glisser-déposer continu, paliers d'amélioration du sac.
 > 💡 *À détailler* : taille de départ du sac (nb de slots), paliers d'amélioration, durée de vie de la cache.
-- [ ] Validé
+- [x] Validé
 
 ### Q. Comment l'interface de construction/gestion de base fonctionne-t-elle ?
-**R.** 🟡 Proposition : **menu de construction** puisant dans la **bibliothèque de pièces**,
+**R.** ✅ **Menu de construction** puisant dans la **bibliothèque de pièces**,
 **glisser-déposer des PNJ** dans les salles (façon Fallout Shelter), **vue d'ensemble** de la
 base en coupe. Interface terminal cohérente avec la DA.
-> 💡 *À confirmer/affiner.*
-- [ ] Validé
+> 💡 *À détailler* (production) : affordances de pose des pièces, retour visuel d'affectation
+> PNJ, indicateurs de production/défense par salle.
+- [x] Validé
 
 ### Q. Comment le joueur apprend-il le jeu (onboarding) ?
-**R.** 🟡 Proposition : apprentissage **progressif** (creuser → récolter → construire une 1re
-pièce → explorer plus loin), **infobulles contextuelles**, **peu de tutoriel bloquant**.
-> 💡 *À confirmer.*
-- [ ] Validé
+**R.** ✅ Apprentissage **progressif** (creuser → récolter → construire une 1re pièce →
+explorer plus loin), **infobulles contextuelles**, **peu de tutoriel bloquant** — on apprend
+en faisant, cohérent avec le ton survie/exploration.
+> 💡 *À détailler* (production) : séquence exacte des premières minutes, déclencheurs des
+> infobulles, intégration narrative légère au Foyer de départ.
+- [x] Validé
 
-### Q. Quelles options d'accessibilité ?
-**R.** 🟡 Proposition : **remap des touches**, options de **lisibilité** (taille de texte,
-contraste, daltonisme — important dans un monde sombre), réglages de **difficulté**.
-> 💡 *À confirmer/étoffer.*
-- [ ] Validé
+### Q. Quelles options d'accessibilité et de difficulté ?
+**R.** ✅ **Modes de difficulté** (presets — ex. *Découverte / Normal / Survécu*) ajustant
+dégâts, intensité des **raids** et rareté : la tension d'extraction reste le cœur, mais reste
+**accessible au plus grand nombre**. **Socle d'accessibilité garanti dès le départ :**
+- **Remap complet des touches** (essentiel, notamment AZERTY/QWERTY) ;
+- **Mode daltonien** — palettes alternatives pour les couleurs d'alerte (danger/loot), clé vu
+  l'usage du **rouge** dans la DA ([04](04-direction-artistique.md)) ;
+- **Aides de confort** — ralentir/mettre en pause l'action, maintien vs appui, marqueurs de
+  danger renforcés.
+> 💡 *À étoffer* : **lisibilité du texte** (taille de police réglable, contraste renforcé) —
+> souhaitable dans un monde sombre, à viser au-delà du socle ; détail des paramètres par mode
+> de difficulté.
+- [x] Validé
 
 ### Q. Comment fonctionne la sauvegarde (monde persistant) ?
 **R.** ✅ **Auto-sauvegarde continue** : le monde et la base se sauvegardent automatiquement
 (façon Minecraft/survie). **Plusieurs slots** de partie possibles.
 > 💡 *À détailler* : fréquence/points d'auto-save, sauvegarde cloud ?
-- [ ] Validé
+- [x] Validé

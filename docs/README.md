@@ -45,22 +45,22 @@
 
 | # | Section | Fichier | Statut |
 |---|---------|---------|--------|
-| 00 | Vision & Concept | [00-vision-concept.md](00-vision-concept.md) | ✅ Répondu |
-| 01 | Boucle de jeu & Mécaniques | [01-boucle-mecaniques.md](01-boucle-mecaniques.md) | ✅ Répondu |
-| 02 | Univers & Narration | [02-univers-narration.md](02-univers-narration.md) | ✅ Répondu |
-| 03 | Personnages & Ennemis | [03-personnages-ennemis.md](03-personnages-ennemis.md) | ✅ Répondu |
-| 04 | Direction artistique | [04-direction-artistique.md](04-direction-artistique.md) | ✅ Répondu |
-| 05 | Audio | [05-audio.md](05-audio.md) | ✅ Répondu |
-| 06 | Contenu & Progression | [06-contenu-progression.md](06-contenu-progression.md) | ✅ Répondu |
-| 07 | UX / UI & Accessibilité | [07-ux-ui-accessibilite.md](07-ux-ui-accessibilite.md) | ✅ Répondu |
-| 08 | Périmètre & Production | [08-perimetre-production.md](08-perimetre-production.md) | ✅ Répondu |
+| 00 | Vision & Concept | [00-vision-concept.md](00-vision-concept.md) | ✅ Validé |
+| 01 | Boucle de jeu & Mécaniques | [01-boucle-mecaniques.md](01-boucle-mecaniques.md) | ✅ Validé |
+| 02 | Univers & Narration | [02-univers-narration.md](02-univers-narration.md) | ✅ Validé |
+| 03 | Personnages & Ennemis | [03-personnages-ennemis.md](03-personnages-ennemis.md) | ✅ Validé |
+| 04 | Direction artistique | [04-direction-artistique.md](04-direction-artistique.md) | ✅ Validé |
+| 05 | Audio | [05-audio.md](05-audio.md) | ✅ Validé |
+| 06 | Contenu & Progression | [06-contenu-progression.md](06-contenu-progression.md) | ✅ Validé |
+| 07 | UX / UI & Accessibilité | [07-ux-ui-accessibilite.md](07-ux-ui-accessibilite.md) | ✅ Validé |
+| 08 | Périmètre & Production | [08-perimetre-production.md](08-perimetre-production.md) | ✅ Validé |
 
-> **État de l'étude : structure complète.** Toutes les questions structurantes ont une
-> réponse (`✅`). **Titre et tagline trouvés** (*Les Enfouis*). Ne restent que des points de
-> **détail** marqués `À détailler` dans les fichiers (raffinements de production).
-> Prochaine étape : relire/valider
-> section par section (cocher les `- [ ] Validé`), puis prototyper le **vertical slice**
-> (cf. [08](08-perimetre-production.md)).
+> **État de l'étude : GDD INTÉGRALEMENT VALIDÉ** (9 sections, toutes les cases `- [x] Validé`
+> cochées en interview — juin 2026). **Titre et tagline trouvés** (*Les Enfouis*). Ne restent
+> que des points de **détail** marqués `À détailler` dans les fichiers (raffinements de
+> production / équilibrage). Le **risque n°1 (fun creuser/extraire) est levé** au prototype, et
+> le **vertical slice** est jouable. **Prochaine étape : production du MVP** = *Foyer + 1 zone
+> (Transit) + son boss* (cf. [08](08-perimetre-production.md) et [06](06-contenu-progression.md)).
 
 ## Glossaire (termes du projet)
 
