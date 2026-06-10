@@ -44,8 +44,8 @@ func spawn(base_pos: Vector2) -> void:
 		if randf() > keep * keep:   # courbe au carré → concentre les robots vers la surface
 			continue
 		var p := Vector2(tx * ts + ts * 0.5, ty * ts + ts * 0.5)
-		if p.distance_to(base_pos) < 12.0 * ts:
-			continue   # zone de répit autour de la base profonde
+		if p.distance_to(base_pos) < 26.0 * ts:
+			continue   # zone de répit autour du Foyer (demi-largeur 17 tuiles + marge)
 		_add(p)
 
 func _add(p: Vector2) -> void:

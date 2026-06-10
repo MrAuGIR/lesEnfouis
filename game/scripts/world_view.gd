@@ -6,12 +6,22 @@ extends Node2D
 const VIEW_RX := 34   # demi-largeur de la fenêtre de tuiles dessinées
 const VIEW_RY := 22
 
+const ROOM_TINTS := [
+	Color(0.95, 0.75, 0.35, 0.10),   # dortoir
+	Color(0.45, 0.85, 0.45, 0.10),   # production (rations)
+	Color(0.95, 0.55, 0.30, 0.10),   # atelier
+	Color(0.50, 0.65, 0.95, 0.10),   # entrepôt
+]
+const ROOM_LABELS := ["DORTOIR", "PROD. RATIONS", "ATELIER", "ENTREPOT"]
+
 var world: WorldGrid
 var hero: Hero
 var light: LightField
 var crew: EnemyCrew
 var combat: Combat
-var camp: BaseCamp
+var foyer: Foyer
+var pop: Population
+var caravan: Caravan
 
 var dig_target := Vector2i(-1, -1)
 var dig_frac := 0.0               # progression du creusage (0..1)
@@ -124,19 +134,41 @@ func _draw() -> void:
 	var exit_p := Vector2(ex * ts + ts * 0.5, world.surface[ex] * ts)
 	draw_rect(Rect2(exit_p + Vector2(-WorldGrid.EXIT_HALF * ts, -3), Vector2(WorldGrid.EXIT_HALF * 2 * ts, 3)), Color(0.95, 0.85, 0.3, 0.85))
 	draw_string(font, exit_p + Vector2(-14, -6), "SORTIE", HORIZONTAL_ALIGNMENT_LEFT, -1, 8, Color(1.0, 0.95, 0.55))
-	draw_circle(camp.pos, BaseCamp.BASE_RANGE, Color(0.3, 0.9, 0.4, 0.08))
-	draw_rect(Rect2(camp.pos + Vector2(-9, -3), Vector2(18, 6)), Color(0.3, 0.85, 0.4))
-	draw_string(font, camp.pos + Vector2(-12, -7), "BASE", HORIZONTAL_ALIGNMENT_LEFT, -1, 7, Color(0.6, 1.0, 0.7))
-	# Bâtiments construits (avec étiquettes)
-	if camp.has_prod:
-		var pr := camp.pos + Vector2(-3.6 * ts, -2.0 * ts)
-		draw_rect(Rect2(pr, Vector2(2.4 * ts, 2.0 * ts)), Color(0.25, 0.45, 0.70))
-		draw_rect(Rect2(pr + Vector2(0.9 * ts, 1.0 * ts), Vector2(6, 12)), Color(0.95, 0.9, 0.65))  # PNJ
-		draw_string(font, pr + Vector2(1, -2), "PROD", HORIZONTAL_ALIGNMENT_LEFT, -1, 7, Color(0.7, 0.85, 1.0))
-	if camp.has_workshop:
-		var ws := camp.pos + Vector2(1.2 * ts, -2.0 * ts)
-		draw_rect(Rect2(ws, Vector2(2.4 * ts, 2.0 * ts)), Color(0.60, 0.45, 0.25))
-		draw_string(font, ws + Vector2(1, -2), "ATELIER", HORIZONTAL_ALIGNMENT_LEFT, -1, 7, Color(1.0, 0.85, 0.6))
+	# Le Foyer : étiquette + cellules (vides en pointillé d'intention, pièces teintées)
+	draw_string(font, Vector2((world.exit_col() - 2) * ts, world.foyer_y0() * ts - 5), "LE FOYER",
+		HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color(0.6, 1.0, 0.7))
+	for i in foyer.cells.size():
+		var cr: Rect2i = foyer.cells[i]["rect"]
+		var rr := Rect2(Vector2(cr.position) * float(ts), Vector2(cr.size) * float(ts))
+		var room := int(foyer.cells[i]["room"])
+		if room < 0:
+			draw_rect(rr, Color(1, 1, 1, 0.03))
+			draw_rect(rr, Color(0.55, 0.6, 0.66, 0.35), false, 1.0)
+			draw_string(font, rr.position + Vector2(4, 10), "CELLULE VIDE  [E]", HORIZONTAL_ALIGNMENT_LEFT, -1, 7, Color(0.55, 0.6, 0.66))
+		else:
+			draw_rect(rr, ROOM_TINTS[room])
+			draw_rect(rr, Color(ROOM_TINTS[room].r, ROOM_TINTS[room].g, ROOM_TINTS[room].b, 0.55), false, 1.0)
+			var lbl: String = ROOM_LABELS[room]
+			if int(Foyer.ROOM_SLOTS[room]) > 0:
+				lbl += "  %d/%d" % [pop.assigned_to(i).size(), int(Foyer.ROOM_SLOTS[room])]
+			draw_string(font, rr.position + Vector2(4, 10), lbl, HORIZONTAL_ALIGNMENT_LEFT, -1, 7,
+				Color(ROOM_TINTS[room].r, ROOM_TINTS[room].g, ROOM_TINTS[room].b, 0.95))
+	# PNJ du Foyer (toujours un peu visibles : c'est la maison, elle vit)
+	for npc in pop.npcs:
+		var np: Vector2 = npc["pos"]
+		var nvis: float = maxf(0.55, light.brightness(int(np.x / ts), int(np.y / ts)))
+		draw_rect(Rect2(np - Population.NPC_HALF, Population.NPC_HALF * 2.0),
+			Color(0.62 * nvis, 0.78 * nvis, 0.92 * nvis))
+		draw_rect(Rect2(np - Population.NPC_HALF, Population.NPC_HALF * 2.0), Color(0, 0, 0, 0.5), false, 1.0)
+		var nm := String(npc["name"]).split(" ")[0]
+		var nw := font.get_string_size(nm, HORIZONTAL_ALIGNMENT_LEFT, -1, 6).x
+		draw_string(font, np + Vector2(-nw * 0.5, -Population.NPC_HALF.y - 3.0), nm, HORIZONTAL_ALIGNMENT_LEFT, -1, 6, Color(0.8, 0.88, 0.95, 0.9))
+	# La caravane (quand elle est là) : marchand + zone de troc
+	if caravan.present:
+		draw_circle(caravan.pos, Caravan.TRADE_RANGE, Color(0.9, 0.7, 0.3, 0.07))
+		draw_rect(Rect2(caravan.pos - Vector2(7, 11), Vector2(14, 22)), Color(0.85, 0.65, 0.30))
+		draw_rect(Rect2(caravan.pos - Vector2(7, 11), Vector2(14, 22)), Color(0.3, 0.2, 0.08, 0.8), false, 1.0)
+		draw_string(font, caravan.pos + Vector2(-26, -16), "CARAVANE [E]", HORIZONTAL_ALIGNMENT_LEFT, -1, 7, Color(1.0, 0.85, 0.5))
 	# Cache de butin (déposée à la mort, à récupérer)
 	if cache_active:
 		draw_circle(cache_pos, cache_range, Color(0.95, 0.75, 0.25, 0.16))

@@ -6,8 +6,14 @@ extends RefCounted
 const BAG_SLOTS := 8             # nombre de cases du sac (la "capacité" = nb de slots)
 const STACK_MAX := 64            # taille d'une pile (objets identiques empilés)
 
+# Rations (M2) : produites au Foyer, ressource d'échange/troc — pas une tuile,
+# l'id 8 prolonge la numérotation des types de tuile de WorldGrid (LADDER = 7).
+const RATIONS := 8
+
 # Ressources transportables (ordre d'affichage dans l'inventaire / le stockage)
 const RES_TYPES := [WorldGrid.DIRT, WorldGrid.ROCK, WorldGrid.WOOD, WorldGrid.LITHIUM]
+# Ressources du stock du Foyer (RES_TYPES + ce qui n'est pas minable)
+const STORE_TYPES := [WorldGrid.DIRT, WorldGrid.ROCK, WorldGrid.WOOD, WorldGrid.LITHIUM, RATIONS]
 
 # Chaque slot est {} (vide) ou {"type": int, "count": int}.
 var slots := []
@@ -81,6 +87,7 @@ static func res_color(t: int) -> Color:
 		WorldGrid.ROCK: return Color(0.40, 0.42, 0.46)
 		WorldGrid.WOOD: return Color(0.55, 0.38, 0.15)
 		WorldGrid.LITHIUM: return Color(0.45, 0.74, 0.80)
+		RATIONS: return Color(0.58, 0.72, 0.34)
 	return Color(0.6, 0.6, 0.6)
 
 static func res_name(t: int) -> String:
@@ -89,4 +96,5 @@ static func res_name(t: int) -> String:
 		WorldGrid.ROCK: return "Roche"
 		WorldGrid.WOOD: return "Bois"
 		WorldGrid.LITHIUM: return "Lithium"
+		RATIONS: return "Rations"
 	return "?"

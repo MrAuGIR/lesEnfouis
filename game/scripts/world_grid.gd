@@ -17,6 +17,7 @@ const LITHIUM := 4 # minerai de lithium (dans la roche) → recharge la lampe fr
 const WALL := 5    # béton d'un bunker abandonné (creusable, sans ressource : gravats)
 const HARDROCK := 6 # roche dense (barrière) : nécessite l'outil Fer (niveau >= 1)
 const LADDER := 7   # échelle (construite en bois) : on grimpe dessus
+const PASSERELLE := 9  # plancher de bois construit (1 bois = 1 bloc) — l'id 8 est réservé aux rations
 
 # Bunkers abandonnés (seule source de bois : structures humaines, pas le sol)
 const STRUCT_COUNT := 60
@@ -34,6 +35,14 @@ const GAS_FLOOR_ROW := AIR_ROWS + 20  # tuiles AU-DESSUS de cette rangée = zone
 
 const ROCK_MULT := 2.5            # la roche se creuse plus lentement
 const HARD_MULT := 4.5            # creusage de la roche dense (très lent)
+
+# Le Foyer (M2) : pièces construites librement sur une grille de MODULES au
+# gabarit unique (intérieur 8x5, murs mitoyens partagés). Seul le hall de départ
+# est préconstruit ; le reste se bâtit en jeu (cf. foyer.gd).
+const MOD_W := 10                 # empreinte d'un module, murs compris
+const MOD_H := 7
+const PITCH_X := MOD_W - 1        # pas de la grille (les murs mitoyens se partagent)
+const PITCH_Y := MOD_H - 1
 
 var grid := PackedByteArray()
 var surface := PackedInt32Array() # hauteur du terrain par colonne (lumière du ciel)
@@ -79,6 +88,7 @@ func generate() -> void:
 						t = LITHIUM
 			grid[y * GRID_W + x] = t
 	_place_structures()
+	_place_hall()
 	_place_barrier_and_exit()
 
 func _place_barrier_and_exit() -> void:
@@ -101,11 +111,7 @@ func _place_structures() -> void:
 		var x0 := randi_range(2, GRID_W - w - 2)
 		var y0 := randi_range(AIR_ROWS + 14, GRID_H - h - 2)
 		_carve_structure(x0, y0, w, h)
-	# Base profonde : salle sûre garantie au point de départ + un bunker de bois accolé
-	# (amorce le craft : on doit pouvoir poser l'atelier AVANT de franchir la barrière).
-	var cx := exit_col()
-	_carve_structure(cx - 4, BASE_DEPTH - 4, 9, 7)   # salle haute (garde au plafond pour le spawn)
-	_carve_structure(cx + 7, BASE_DEPTH - 3, 7, 5)
+	# (la salle de départ du proto est remplacée par le hall du Foyer — cf. _place_hall)
 
 func _carve_structure(x0: int, y0: int, w: int, h: int) -> void:
 	for y in range(y0, y0 + h):
@@ -119,6 +125,25 @@ func _carve_structure(x0: int, y0: int, w: int, h: int) -> void:
 
 func exit_col() -> int:
 	return int(GRID_W * 0.5)
+
+# --- Le Foyer (géométrie de la grille de modules, partagée avec foyer.gd) -------
+func hall_origin() -> Vector2i:   # coin haut-gauche (tuiles) du module HALL de départ
+	return Vector2i(exit_col() - 5, BASE_DEPTH - 5)
+
+func _place_hall() -> void:
+	# Le hall de départ : seul module préconstruit. Portes latérales au ras du
+	# sol, caisses de bois (premier bois garanti). Le reste du Foyer se bâtit en
+	# jeu, en mode construction (touche B) sur la grille de modules.
+	var o := hall_origin()
+	for y in range(o.y, o.y + MOD_H):
+		for x in range(o.x, o.x + MOD_W):
+			var border := x == o.x or x == o.x + MOD_W - 1 or y == o.y or y == o.y + MOD_H - 1
+			grid[y * GRID_W + x] = WALL if border else EMPTY
+	for dy in [1, 2]:   # portes (2 tuiles de haut, au ras du sol intérieur)
+		grid[(o.y + MOD_H - 1 - dy) * GRID_W + o.x] = EMPTY
+		grid[(o.y + MOD_H - 1 - dy) * GRID_W + o.x + MOD_W - 1] = EMPTY
+	for dx in range(1, 4):  # caisses de bois sur le sol, côté gauche
+		grid[(o.y + MOD_H - 2) * GRID_W + o.x + dx] = WOOD
 
 # --- Accès -------------------------------------------------------------------
 func tile(tx: int, ty: int) -> int:
@@ -143,7 +168,8 @@ func is_solid(tx: int, ty: int) -> bool:
 
 func is_diggable(tx: int, ty: int) -> bool:
 	var t := tile(tx, ty)
-	return t == DIRT or t == ROCK or t == WOOD or t == LITHIUM or t == WALL or t == HARDROCK
+	return t == DIRT or t == ROCK or t == WOOD or t == LITHIUM or t == WALL \
+		or t == HARDROCK or t == PASSERELLE
 
 func dig_mult(t: int) -> float:
 	if t == HARDROCK:

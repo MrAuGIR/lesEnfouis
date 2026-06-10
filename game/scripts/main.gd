@@ -2,8 +2,8 @@ extends Node2D
 ## Les Enfouis — MVP (grey-box). Orchestration : crée les systèmes, route les
 ## entrées, fait tourner la boucle. La logique vit dans les modules :
 ##   world_grid (monde) · hero (héros) · light_field (lumière) · inventory (sac)
-##   base_camp (base) · enemy_crew (robots) · combat (armes) · world_view (rendu)
-##   hud (interface) · inv_ui (écran d'inventaire)
+##   foyer (base à pièces) · population (PNJ) · caravan (troc) · enemy_crew (robots)
+##   combat (armes) · world_view (rendu) · hud · inv_ui / room_ui / trade_ui (écrans)
 
 # Creusage
 const DIG_TIME := 0.28           # s pour creuser 1 bloc de terre (le nerf du game feel)
@@ -19,13 +19,17 @@ var world: WorldGrid
 var hero: Hero
 var light: LightField
 var bag: Inventory
-var camp: BaseCamp
+var foyer: Foyer
+var pop: Population
+var caravan: Caravan
 var crew: EnemyCrew
 var combat: Combat
 var view: WorldView
 var camera: Camera2D
 var hud: Hud
 var inv_ui: InvUI
+var room_ui: RoomUI
+var trade_ui: TradeUI
 
 var dig_level := 0                # palier d'outil : 0 Pierre, 1 Fer, 2 Acier
 var dig_target := Vector2i(-1, -1)
@@ -46,16 +50,19 @@ func _ready() -> void:
 	hero.spawn()
 	light = LightField.new(world, hero)
 	bag = Inventory.new()
-	camp = BaseCamp.new()
-	camp.pos = hero.pos
+	foyer = Foyer.new(world)
+	pop = Population.new(world, foyer)
+	caravan = Caravan.new(world, foyer)
 	crew = EnemyCrew.new(world, light, hero)
-	crew.spawn(camp.pos)
+	crew.spawn(foyer.pos)
 	view = WorldView.new()
 	view.world = world
 	view.hero = hero
 	view.light = light
 	view.crew = crew
-	view.camp = camp
+	view.foyer = foyer
+	view.pop = pop
+	view.caravan = caravan
 	view.cache_range = CACHE_RANGE
 	add_child(view)
 	camera = Camera2D.new()
@@ -70,23 +77,41 @@ func _ready() -> void:
 	add_child(hud)
 	combat = Combat.new(hero, world, crew, bag, hud, view)
 	view.combat = combat
-	# Calque d'inventaire (plein écran, masqué par défaut), au-dessus du HUD
+	# Écrans plein écran (masqués par défaut), au-dessus du HUD
 	inv_ui = InvUI.new()
 	inv_ui.bag = bag
-	inv_ui.camp = camp
+	inv_ui.foyer = foyer
 	inv_ui.hero = hero
 	inv_ui.hud = hud
-	inv_ui.set_anchors_preset(Control.PRESET_FULL_RECT)
-	inv_ui.mouse_filter = Control.MOUSE_FILTER_STOP
-	inv_ui.visible = false
-	hud.add_child(inv_ui)
+	_setup_screen(inv_ui)
+	room_ui = RoomUI.new()
+	room_ui.foyer = foyer
+	room_ui.pop = pop
+	room_ui.hud = hud
+	_setup_screen(room_ui)
+	trade_ui = TradeUI.new()
+	trade_ui.foyer = foyer
+	trade_ui.caravan = caravan
+	trade_ui.combat = combat
+	trade_ui.hud = hud
+	_setup_screen(trade_ui)
 	_update_hud()
+
+func _setup_screen(ui: Control) -> void:
+	ui.set_anchors_preset(Control.PRESET_FULL_RECT)
+	ui.mouse_filter = Control.MOUSE_FILTER_STOP
+	ui.visible = false
+	hud.add_child(ui)
+
+# Un écran est ouvert (inventaire, cellule, troc) → fige héros/robots/armes/creusage.
+func _ui_open() -> bool:
+	return inv_open or room_ui.visible or trade_ui.visible
 
 # --- Boucle -------------------------------------------------------------------
 func _physics_process(delta: float) -> void:
-	hero.move(delta, not inv_open)
-	if not inv_open:
-		crew.update(delta)   # l'inventaire fige le jeu (héros ET robots)
+	hero.move(delta, not _ui_open())
+	if not _ui_open():
+		crew.update(delta)   # un écran ouvert fige le jeu (héros ET robots)
 	if hero.hp <= 0.0:
 		_die()
 	camera.global_position = hero.pos
@@ -94,14 +119,22 @@ func _physics_process(delta: float) -> void:
 func _process(delta: float) -> void:
 	_update_aim()
 	hero.deplete_lamp(delta)
-	camp.produce(delta)
+	foyer.produce(delta, pop)
+	var pop_msg := pop.update(delta)
+	if pop_msg != "":
+		hud.flash(pop_msg)
+	var car_msg := caravan.update(delta)
+	if car_msg != "":
+		hud.flash(car_msg)
+	if trade_ui.visible and not caravan.present:
+		trade_ui.visible = false   # la caravane est repartie pendant le troc
 	_check_exit()
 	var gas_msg := hero.update_gas(delta)
 	if gas_msg != "":
 		hud.flash(gas_msg)
 	if hero.hp <= 0.0:
 		_die()
-	combat.update(delta, not inv_open and Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT))
+	combat.update(delta, not _ui_open() and Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT))
 	_handle_dig(delta)
 	hud.tick(delta)
 	_update_hud()
@@ -110,36 +143,51 @@ func _process(delta: float) -> void:
 	view.tick(delta)
 	if inv_open:
 		inv_ui.queue_redraw()   # la pile tenue suit le curseur
+	if trade_ui.visible:
+		trade_ui.queue_redraw() # le compte à rebours de départ vit
 
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
-		if event.keycode == KEY_R:
-			_refuel()
-		elif event.keycode == KEY_T:
-			_place_torch()
-		elif event.keycode == KEY_F or event.physical_keycode == KEY_F:
-			_place_ladder()
+		var panel_open := room_ui.visible or trade_ui.visible
+		if event.keycode == KEY_ESCAPE:
+			if inv_open:
+				_toggle_inventory()
+			room_ui.close()
+			trade_ui.visible = false
 		elif event.keycode == KEY_E:
-			_interact()
-		elif event.keycode == KEY_Q:
-			_withdraw()
-		elif event.keycode == KEY_1 or event.physical_keycode == KEY_1:
-			_build_production()
-		elif event.keycode == KEY_2 or event.physical_keycode == KEY_2:
-			_build_workshop()
-		elif event.keycode == KEY_3 or event.physical_keycode == KEY_3:
-			_upgrade_tool()
-		elif event.keycode == KEY_4 or event.physical_keycode == KEY_4:
-			_craft_antipol()
+			if panel_open:
+				room_ui.close()
+				trade_ui.visible = false
+			elif not inv_open:
+				_interact()
 		elif event.keycode == KEY_I or event.physical_keycode == KEY_I:
-			_toggle_inventory()
+			if not panel_open:
+				_toggle_inventory()
+		elif event.keycode == KEY_Q:
+			if not _ui_open():
+				_withdraw()
+		elif event.keycode == KEY_R:
+			if not _ui_open():
+				_refuel()
+		elif event.keycode == KEY_T:
+			if not _ui_open():
+				_place_torch()
+		elif event.keycode == KEY_F or event.physical_keycode == KEY_F:
+			if not _ui_open():
+				_place_ladder()
+		elif event.keycode == KEY_3 or event.physical_keycode == KEY_3:
+			if not _ui_open():
+				_upgrade_tool()
+		elif event.keycode == KEY_4 or event.physical_keycode == KEY_4:
+			if not _ui_open():
+				_craft_antipol()
 		elif event.keycode == KEY_X or event.physical_keycode == KEY_X:
 			combat.swap_weapon()
 		elif event.keycode == KEY_M or event.physical_keycode == KEY_M:
 			hud.flash(hero.toggle_antipol())
 		elif event.keycode == KEY_K:
 			hero.damage(Hero.MAX_HP)   # mort de test
-	elif event is InputEventMouseButton and event.pressed and not inv_open:
+	elif event is InputEventMouseButton and event.pressed and not _ui_open():
 		if event.button_index == MOUSE_BUTTON_WHEEL_UP or event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
 			combat.swap_weapon()
 
@@ -166,34 +214,64 @@ func _die() -> void:
 		cache_active = true
 		cache_pos = hero.pos
 		cache = {}
-		for t in Inventory.RES_TYPES:
+		for t in Inventory.STORE_TYPES:
 			cache[t] = bag.count(t)
 		bag.clear()
-	hero.pos = camp.pos
-	hero.vel = Vector2.ZERO
-	hero.hp = Hero.MAX_HP
-	hud.flash("Tu es mort... reapparition a la base." + ("  >> CACHE laissee sur place <<" if cache_active else ""))
+	hero.spawn()   # réapparition au Foyer, PV au max
+	hud.flash("Tu es mort... reapparition au Foyer." + ("  >> CACHE laissee sur place <<" if cache_active else ""))
 
+# [E] contextuel : caravane > cache > cellule du Foyer > hall (dépôt rapide).
 func _interact() -> void:
-	if camp.near(hero.pos):
-		_deposit()
-	elif cache_active and hero.pos.distance_to(cache_pos) <= CACHE_RANGE:
+	if caravan.near(hero.pos):
+		trade_ui.visible = true
+		trade_ui.queue_redraw()
+		return
+	if cache_active and hero.pos.distance_to(cache_pos) <= CACHE_RANGE:
 		_recover_cache()
+		return
+	var ci := foyer.cell_at(hero.pos)
+	if ci >= 0:
+		var room := int(foyer.cells[ci]["room"])
+		if room < 0:
+			room_ui.open_build(ci)
+		elif room == Foyer.ROOM_PROD:
+			room_ui.open_assign(ci)
+		elif room == Foyer.ROOM_DORTOIR:
+			hero.hp = Hero.MAX_HP
+			hud.flash("Tu te reposes au dortoir : PV au maximum.")
+		elif room == Foyer.ROOM_ENTREPOT:
+			_deposit()
+		elif room == Foyer.ROOM_ATELIER:
+			hud.flash("Atelier : [3] ameliorer l'outil   [4] cartouche anti-gaz (5 Li + 3 bois)")
+	elif foyer.inside(hero.pos):
+		_deposit()   # dans le hall : dépôt rapide du sac
 
 func _deposit() -> void:
-	for t in Inventory.RES_TYPES:
-		camp.add(t, bag.count(t))
-	bag.clear()
-	hero.hp = Hero.MAX_HP   # on se soigne à la base
+	var moved_total := 0
+	var lost := 0
+	for t in Inventory.STORE_TYPES:
+		var have := bag.count(t)
+		if have <= 0:
+			continue
+		var moved := foyer.add(t, have)
+		bag.remove(t, moved)
+		moved_total += moved
+		lost += have - moved
+	if lost > 0:
+		hud.flash("Stock du Foyer plein ! %d objet(s) restent dans le sac (construis un entrepot)" % lost)
+	elif moved_total > 0:
+		hud.flash("Depose : %d ressource(s) au stock du Foyer" % moved_total)
+	else:
+		hud.flash("Sac vide : rien a deposer")
 
 func _withdraw() -> void:
-	# Base → sac : raccourci pratique (priorité au carburant, puis bois/roche/terre),
+	# Stock → sac : raccourci pratique (priorité au carburant, puis bois/roche/terre),
 	# dans la limite des slots libres. Le réglage fin se fait à l'inventaire (touche I).
-	if not camp.near(hero.pos):
+	if not foyer.inside(hero.pos):
 		return
 	for t in [WorldGrid.LITHIUM, WorldGrid.WOOD, WorldGrid.ROCK, WorldGrid.DIRT]:
-		var moved := bag.add(t, camp.count(t))
-		camp.remove(t, moved)
+		var moved := bag.add(t, foyer.count(t))
+		foyer.remove(t, moved)
 
 func _recover_cache() -> void:
 	for t in cache:
@@ -237,64 +315,37 @@ func _place_ladder() -> void:
 	else:
 		hud.flash("Echelle : rien a poser (pas de place ou pas de bois)")
 
-# --- Base (constructions simples — remplacées par les pièces du Foyer en M2) ----
-func _build_production() -> void:
-	if not camp.near(hero.pos):
-		hud.flash("Approche-toi de la base (zone verte)")
-		return
-	if camp.has_prod:
-		hud.flash("Production deja construite")
-		return
-	if not camp.can_pay(BaseCamp.COST_PROD):
-		hud.flash("Pas assez en base : il faut 12 roche + 8 bois")
-		return
-	camp.pay(BaseCamp.COST_PROD)
-	camp.has_prod = true   # un PNJ y est affecté automatiquement (grey-box)
-	hud.flash("Production construite ! Un PNJ produit du lithium en passif.")
-
-func _build_workshop() -> void:
-	if not camp.near(hero.pos):
-		hud.flash("Approche-toi de la base (zone verte)")
-		return
-	if camp.has_workshop:
-		hud.flash("Atelier deja construit")
-		return
-	if not camp.can_pay(BaseCamp.COST_WORKSHOP):
-		hud.flash("Pas assez en base : il faut 15 roche + 6 bois")
-		return
-	camp.pay(BaseCamp.COST_WORKSHOP)
-	camp.has_workshop = true
-	hud.flash("Atelier construit ! Tu peux ameliorer l'outil (touche 3).")
+# --- Atelier (pièce du Foyer requise, et il faut y être) -------------------------
+func _at_workshop() -> bool:
+	if foyer.room_at(hero.pos) == Foyer.ROOM_ATELIER:
+		return true
+	if foyer.has_room(Foyer.ROOM_ATELIER):
+		hud.flash("Va dans l'ATELIER du Foyer pour ca")
+	else:
+		hud.flash("Il faut un ATELIER : construis-le dans une cellule du Foyer ([E] dedans)")
+	return false
 
 func _upgrade_tool() -> void:
-	if not camp.near(hero.pos):
-		hud.flash("Approche-toi de la base (zone verte)")
-		return
-	if not camp.has_workshop:
-		hud.flash("Atelier requis d'abord (touche 2)")
+	if not _at_workshop():
 		return
 	if dig_level >= DIG_TIERS.size() - 1:
 		hud.flash("Outil deja au maximum (Acier)")
 		return
 	var cost: Dictionary = UPGRADE_COST[dig_level + 1]
-	if not camp.can_pay(cost):
-		hud.flash("Pas assez en base : %d roche + %d lithium" % [int(cost.get(WorldGrid.ROCK, 0)), int(cost.get(WorldGrid.LITHIUM, 0))])
+	if not foyer.can_pay(cost):
+		hud.flash("Pas assez en stock : %d roche + %d lithium" % [int(cost.get(WorldGrid.ROCK, 0)), int(cost.get(WorldGrid.LITHIUM, 0))])
 		return
-	camp.pay(cost)
+	foyer.pay(cost)
 	dig_level += 1
 	hud.flash("Outil ameliore : %s (creusage plus rapide)" % TIER_NAMES[dig_level])
 
 func _craft_antipol() -> void:
-	if not camp.near(hero.pos):
-		hud.flash("Approche-toi de la base (zone verte)")
+	if not _at_workshop():
 		return
-	if not camp.has_workshop:
-		hud.flash("Atelier requis pour crafter (touche 2)")
+	if not foyer.can_pay(COST_ANTIPOL):
+		hud.flash("Pas assez en stock : il faut 5 lithium + 3 bois")
 		return
-	if not camp.can_pay(COST_ANTIPOL):
-		hud.flash("Pas assez en base : il faut 5 lithium + 3 bois")
-		return
-	camp.pay(COST_ANTIPOL)
+	foyer.pay(COST_ANTIPOL)
 	hero.antipol_fuel += Hero.ANTIPOL_PER_CHARGE
 	hud.flash("Cartouche anti-gaz craftee (%d). Activer : touche M." % hero.antipol_charges())
 
@@ -308,7 +359,7 @@ func _toggle_inventory() -> void:
 
 # --- Creusage -----------------------------------------------------------------
 func _handle_dig(delta: float) -> void:
-	if inv_open or not Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
+	if _ui_open() or not Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
 		_reset_dig()
 		return
 	var m := get_global_mouse_position()
@@ -357,7 +408,7 @@ func _break_tile(tx: int, ty: int) -> void:
 	elif t == WorldGrid.LITHIUM:
 		item = WorldGrid.LITHIUM
 	if bag.add(item, 1) == 0:
-		hud.flash("Sac plein ! Objet perdu (vide-le a la base, ou touche I)")
+		hud.flash("Sac plein ! Objet perdu (vide-le au Foyer, ou touche I)")
 
 func _in_reach(tx: int, ty: int) -> bool:
 	var center := Vector2(tx * WorldGrid.TILE + WorldGrid.TILE * 0.5, ty * WorldGrid.TILE + WorldGrid.TILE * 0.5)
@@ -370,7 +421,6 @@ func _update_hud() -> void:
 		bagline += "  (PLEIN)"
 	if cache_active:
 		bagline += "     >> CACHE a recuperer <<"
-	var base_line := "Base: Production[%s]  Atelier[%s]  Outil: %s" % ["ON" if camp.has_prod else "-", "ON" if camp.has_workshop else "-", TIER_NAMES[dig_level]]
 	var obj := "Objectif: REMONTER a la surface (barriere de roche dense = outil Fer)"
 	if won:
 		obj = "*** SORTI ! Tu as rejoint la surface ***"
@@ -378,12 +428,19 @@ func _update_hud() -> void:
 		obj += ("   [GAZ: protege]" if (hero.antipol_on and hero.antipol_fuel > 0.0) else "   !! GAZ TOXIQUE : -PV !!")
 	var weap := "Arme: melee" if combat.weapon == 0 else "Arme: feu (%d mun.)" % combat.ammo
 	var antigas := "Anti-gaz: %s (%d)" % ["ON" if hero.antipol_on else "off", hero.antipol_charges()]
-	var hint := "[ZQSD/Fleches] bouger/grimper  [Espace] saut  [Clic G] creuser  [Clic D] attaquer  [Molette/X] arme  [I] inventaire  [F] echelle  [R] lampe  [T] torche  [M] anti-gaz  [E] deposer  [Q] retirer  [K] mort"
-	if camp.near(hero.pos):
-		hint = "BASE >  [1] Production (12 roche/8 bois)   [2] Atelier (15 roche/6 bois)   [3] Ameliorer outil   [4] Cartouche anti-gaz (5 Li/3 bois)   [I] inventaire  [E] deposer  [Q] retirer"
-	hud.set_stats("%s\nPV: %d/%d    %s\nSac    - Li:%d  Bois:%d  Terre:%d  Roche:%d\nBase   - Li:%d  Bois:%d  Terre:%d  Roche:%d\nLampe: %d%%   Torches: %d   %s   |   %s   |   %s" % [
+	var car_status := "ICI ! (%d s)" % maxi(0, int(caravan.stay_t)) if caravan.present else "dans %d s" % maxi(0, int(caravan.timer))
+	var foyer_line := "Foyer  - Dortoir:%d  Prod:%d  Atelier:%d  Entrepot:%d    PNJ: %d/%d    Caravane: %s" % [
+		foyer.room_count(Foyer.ROOM_DORTOIR), foyer.room_count(Foyer.ROOM_PROD),
+		foyer.room_count(Foyer.ROOM_ATELIER), foyer.room_count(Foyer.ROOM_ENTREPOT),
+		pop.npcs.size(), foyer.dortoir_capacity(), car_status]
+	var hint := "[ZQSD/Fleches] bouger/grimper  [Espace] saut  [Clic G] creuser  [Clic D] attaquer  [Molette/X] arme  [I] inventaire  [F] echelle  [R] lampe  [T] torche  [M] anti-gaz  [E] agir  [Q] retirer  [K] mort"
+	if foyer.inside(hero.pos):
+		hint = "FOYER >  [E] agir ici : cellule vide=construire · prod=affecter PNJ · dortoir=repos · entrepot/hall=depot · caravane=troc    [Q] retirer du stock   [I] inventaire   [3]/[4] atelier"
+	hud.set_stats("%s\nPV: %d/%d    %s\nSac    - Li:%d  Bois:%d  Terre:%d  Roche:%d\nStock  - Li:%d  Bois:%d  Terre:%d  Roche:%d  Rations:%d    (%d/%d)\n%s\nLampe: %d%%   Torches: %d   %s   |   %s   |   Outil: %s" % [
 		obj, int(hero.hp), int(Hero.MAX_HP), bagline,
 		bag.count(WorldGrid.LITHIUM), bag.count(WorldGrid.WOOD), bag.count(WorldGrid.DIRT), bag.count(WorldGrid.ROCK),
-		camp.count(WorldGrid.LITHIUM), camp.count(WorldGrid.WOOD), camp.count(WorldGrid.DIRT), camp.count(WorldGrid.ROCK),
-		int(hero.lamp_fuel / Hero.LAMP_AUTONOMY * 100.0), light.torches.size(), antigas, weap, base_line])
+		foyer.count(WorldGrid.LITHIUM), foyer.count(WorldGrid.WOOD), foyer.count(WorldGrid.DIRT), foyer.count(WorldGrid.ROCK),
+		foyer.count(Inventory.RATIONS), foyer.stored_total(), foyer.capacity(),
+		foyer_line,
+		int(hero.lamp_fuel / Hero.LAMP_AUTONOMY * 100.0), light.torches.size(), antigas, weap, TIER_NAMES[dig_level]])
 	hud.set_hints(hint)

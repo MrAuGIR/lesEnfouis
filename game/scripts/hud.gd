@@ -16,7 +16,7 @@ func _ready() -> void:
 	add_child(stats_label)
 	# Message de résultat d'action (sous le bloc stats, au-dessus des raccourcis)
 	msg_label = Label.new()
-	msg_label.position = Vector2(12, 116)
+	msg_label.position = Vector2(12, 152)   # sous le bloc stats (6 lignes depuis M2)
 	msg_label.add_theme_color_override("font_color", Color(1.0, 0.92, 0.45))
 	add_child(msg_label)
 	# Raccourcis : petite police, ancrés en bas de l'écran (960x540)
