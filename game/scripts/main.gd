@@ -37,6 +37,10 @@ var dig_progress := 0.0
 var won := false
 var inv_open := false             # l'écran d'inventaire est ouvert (fige le jeu)
 
+# Mode placement (construction libre) : type de pièce en cours, -1 sinon.
+var placing := -1
+var slots_t := 0.0                # recalcul périodique des slots (connecteurs posés…)
+
 # Cache de butin (à la mort, façon Souls) : une cache précédente est perdue.
 var cache_active := false
 var cache_pos := Vector2.ZERO
@@ -88,6 +92,7 @@ func _ready() -> void:
 	room_ui.foyer = foyer
 	room_ui.pop = pop
 	room_ui.hud = hud
+	room_ui.on_choose = _start_placement
 	_setup_screen(room_ui)
 	trade_ui = TradeUI.new()
 	trade_ui.foyer = foyer
@@ -134,8 +139,13 @@ func _process(delta: float) -> void:
 		hud.flash(gas_msg)
 	if hero.hp <= 0.0:
 		_die()
-	combat.update(delta, not _ui_open() and Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT))
+	combat.update(delta, not _ui_open() and placing < 0 and Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT))
 	_handle_dig(delta)
+	if placing >= 0:
+		slots_t -= delta
+		if slots_t <= 0.0:   # connecteurs posés/cassés entre-temps → on rafraîchit
+			slots_t = 0.5
+			_refresh_slots()
 	hud.tick(delta)
 	_update_hud()
 	view.cache_active = cache_active
@@ -154,6 +164,17 @@ func _input(event: InputEvent) -> void:
 				_toggle_inventory()
 			room_ui.close()
 			trade_ui.visible = false
+			_stop_placement()
+		elif event.keycode == KEY_B or event.physical_keycode == KEY_B:
+			if placing >= 0:
+				_stop_placement()
+			elif room_ui.visible:
+				room_ui.close()
+			elif not _ui_open():
+				room_ui.open_build()
+		elif event.keycode == KEY_G or event.physical_keycode == KEY_G:
+			if not _ui_open() and placing < 0:
+				_place_walkway()
 		elif event.keycode == KEY_E:
 			if panel_open:
 				room_ui.close()
@@ -188,7 +209,12 @@ func _input(event: InputEvent) -> void:
 		elif event.keycode == KEY_K:
 			hero.damage(Hero.MAX_HP)   # mort de test
 	elif event is InputEventMouseButton and event.pressed and not _ui_open():
-		if event.button_index == MOUSE_BUTTON_WHEEL_UP or event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+		if placing >= 0:
+			if event.button_index == MOUSE_BUTTON_LEFT:
+				_place_click(get_global_mouse_position())
+			elif event.button_index == MOUSE_BUTTON_RIGHT:
+				_stop_placement()
+		elif event.button_index == MOUSE_BUTTON_WHEEL_UP or event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
 			combat.swap_weapon()
 
 func _update_aim() -> void:
@@ -220,7 +246,61 @@ func _die() -> void:
 	hero.spawn()   # réapparition au Foyer, PV au max
 	hud.flash("Tu es mort... reapparition au Foyer." + ("  >> CACHE laissee sur place <<" if cache_active else ""))
 
-# [E] contextuel : caravane > cache > cellule du Foyer > hall (dépôt rapide).
+# --- Construction libre (mode placement) -----------------------------------------
+func _start_placement(type: int) -> void:
+	placing = type
+	slots_t = 0.5
+	_refresh_slots()
+	hud.flash("Placement : %s — clique un slot vert ([B]/clic droit : annuler)" % Foyer.ROOM_NAMES[type])
+
+func _stop_placement() -> void:
+	placing = -1
+	view.build_room = -1
+	view.build_slots = []
+
+func _refresh_slots() -> void:
+	var ts := float(WorldGrid.TILE)
+	var rects := []
+	for mp in foyer.valid_slots():
+		var fp := foyer.footprint(mp)
+		rects.append(Rect2(Vector2(fp.position) * ts, Vector2(fp.size) * ts))
+	view.build_room = placing
+	view.build_slots = rects
+
+func _place_click(world_pos: Vector2) -> void:
+	for mp in foyer.valid_slots():
+		var fp := foyer.footprint(mp)
+		var r := Rect2(Vector2(fp.position) * float(WorldGrid.TILE), Vector2(fp.size) * float(WorldGrid.TILE))
+		if not r.has_point(world_pos):
+			continue
+		if not foyer.can_pay(Foyer.ROOM_COSTS[placing]):
+			hud.flash("Pas assez en stock pour : %s" % Foyer.ROOM_NAMES[placing])
+			return
+		foyer.place(mp, placing)
+		hud.flash("%s : construit ! (%s)" % [Foyer.ROOM_NAMES[placing], Foyer.ROOM_NOTES[placing]])
+		if not foyer.can_pay(Foyer.ROOM_COSTS[placing]):
+			_stop_placement()   # plus les moyens d'enchaîner
+		else:
+			_refresh_slots()    # on reste en mode placement pour enchaîner
+		return
+
+# Passerelle [G] : un plancher de bois devant soi, au niveau du sol (1 bois = 1 bloc).
+func _place_walkway() -> void:
+	var ts := float(WorldGrid.TILE)
+	var dir := 1 if hero.aim.x >= 0.0 else -1
+	var tx := int(floor(hero.pos.x / ts)) + dir
+	var ty := int(floor((hero.pos.y + hero.half.y + 1.0) / ts))   # rangée d'appui des pieds
+	if world.tile(tx, ty) != WorldGrid.EMPTY:
+		hud.flash("Passerelle : vise un vide devant toi (regarde vers le trou)")
+		return
+	if bag.count(WorldGrid.WOOD) <= 0:
+		hud.flash("Passerelle : il faut du bois (1 par bloc)")
+		return
+	bag.remove(WorldGrid.WOOD, 1)
+	world.set_tile(tx, ty, WorldGrid.PASSERELLE)
+	view.add_flash(Vector2i(tx, ty), 0.12)
+
+# [E] contextuel : caravane > cache > pièce du Foyer (hall = dépôt rapide).
 func _interact() -> void:
 	if caravan.near(hero.pos):
 		trade_ui.visible = true
@@ -229,22 +309,19 @@ func _interact() -> void:
 	if cache_active and hero.pos.distance_to(cache_pos) <= CACHE_RANGE:
 		_recover_cache()
 		return
-	var ci := foyer.cell_at(hero.pos)
-	if ci >= 0:
-		var room := int(foyer.cells[ci]["room"])
-		if room < 0:
-			room_ui.open_build(ci)
-		elif room == Foyer.ROOM_PROD:
-			room_ui.open_assign(ci)
-		elif room == Foyer.ROOM_DORTOIR:
-			hero.hp = Hero.MAX_HP
-			hud.flash("Tu te reposes au dortoir : PV au maximum.")
-		elif room == Foyer.ROOM_ENTREPOT:
-			_deposit()
-		elif room == Foyer.ROOM_ATELIER:
-			hud.flash("Atelier : [3] ameliorer l'outil   [4] cartouche anti-gaz (5 Li + 3 bois)")
-	elif foyer.inside(hero.pos):
-		_deposit()   # dans le hall : dépôt rapide du sac
+	var rk = foyer.room_key_at(hero.pos)
+	if rk == null:
+		return
+	var room := int(foyer.rooms[rk]["type"])
+	if room == Foyer.ROOM_PROD:
+		room_ui.open_assign(Vector2i(rk))
+	elif room == Foyer.ROOM_DORTOIR:
+		hero.hp = Hero.MAX_HP
+		hud.flash("Tu te reposes au dortoir : PV au maximum.")
+	elif room == Foyer.ROOM_ATELIER:
+		hud.flash("Atelier : [3] ameliorer l'outil   [4] cartouche anti-gaz (5 Li + 3 bois)")
+	else:
+		_deposit()   # hall et entrepôt : dépôt rapide du sac
 
 func _deposit() -> void:
 	var moved_total := 0
@@ -317,12 +394,12 @@ func _place_ladder() -> void:
 
 # --- Atelier (pièce du Foyer requise, et il faut y être) -------------------------
 func _at_workshop() -> bool:
-	if foyer.room_at(hero.pos) == Foyer.ROOM_ATELIER:
+	if foyer.room_type_at(hero.pos) == Foyer.ROOM_ATELIER:
 		return true
 	if foyer.has_room(Foyer.ROOM_ATELIER):
 		hud.flash("Va dans l'ATELIER du Foyer pour ca")
 	else:
-		hud.flash("Il faut un ATELIER : construis-le dans une cellule du Foyer ([E] dedans)")
+		hud.flash("Il faut un ATELIER : construis-le (touche B au Foyer)")
 	return false
 
 func _upgrade_tool() -> void:
@@ -359,7 +436,7 @@ func _toggle_inventory() -> void:
 
 # --- Creusage -----------------------------------------------------------------
 func _handle_dig(delta: float) -> void:
-	if _ui_open() or not Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
+	if _ui_open() or placing >= 0 or not Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
 		_reset_dig()
 		return
 	var m := get_global_mouse_position()
@@ -403,8 +480,8 @@ func _break_tile(tx: int, ty: int) -> void:
 	var item := WorldGrid.DIRT
 	if t == WorldGrid.ROCK or t == WorldGrid.HARDROCK:
 		item = WorldGrid.ROCK
-	elif t == WorldGrid.WOOD:
-		item = WorldGrid.WOOD
+	elif t == WorldGrid.WOOD or t == WorldGrid.PASSERELLE:
+		item = WorldGrid.WOOD   # une passerelle cassée rend son bois
 	elif t == WorldGrid.LITHIUM:
 		item = WorldGrid.LITHIUM
 	if bag.add(item, 1) == 0:
@@ -433,9 +510,11 @@ func _update_hud() -> void:
 		foyer.room_count(Foyer.ROOM_DORTOIR), foyer.room_count(Foyer.ROOM_PROD),
 		foyer.room_count(Foyer.ROOM_ATELIER), foyer.room_count(Foyer.ROOM_ENTREPOT),
 		pop.npcs.size(), foyer.dortoir_capacity(), car_status]
-	var hint := "[ZQSD/Fleches] bouger/grimper  [Espace] saut  [Clic G] creuser  [Clic D] attaquer  [Molette/X] arme  [I] inventaire  [F] echelle  [R] lampe  [T] torche  [M] anti-gaz  [E] agir  [Q] retirer  [K] mort"
-	if foyer.inside(hero.pos):
-		hint = "FOYER >  [E] agir ici : cellule vide=construire · prod=affecter PNJ · dortoir=repos · entrepot/hall=depot · caravane=troc    [Q] retirer du stock   [I] inventaire   [3]/[4] atelier"
+	var hint := "[ZQSD/Fleches] bouger  [Espace] saut  [Clic G] creuser  [Clic D] attaquer  [X] arme  [I] inventaire  [B] construire  [F] echelle  [G] passerelle  [R] lampe  [T] torche  [M] anti-gaz  [E] agir  [Q] retirer  [K] mort"
+	if placing >= 0:
+		hint = "PLACEMENT : %s >  clique un slot vert (colle a une piece, une echelle ou une passerelle)   [B]/[Echap]/clic droit : annuler" % Foyer.ROOM_NAMES[placing]
+	elif foyer.inside(hero.pos):
+		hint = "FOYER >  [B] construire une piece   [E] agir ici : prod=affecter PNJ · dortoir=repos · hall/entrepot=depot · caravane=troc   [Q] retirer du stock   [3]/[4] atelier"
 	hud.set_stats("%s\nPV: %d/%d    %s\nSac    - Li:%d  Bois:%d  Terre:%d  Roche:%d\nStock  - Li:%d  Bois:%d  Terre:%d  Roche:%d  Rations:%d    (%d/%d)\n%s\nLampe: %d%%   Torches: %d   %s   |   %s   |   Outil: %s" % [
 		obj, int(hero.hp), int(Hero.MAX_HP), bagline,
 		bag.count(WorldGrid.LITHIUM), bag.count(WorldGrid.WOOD), bag.count(WorldGrid.DIRT), bag.count(WorldGrid.ROCK),

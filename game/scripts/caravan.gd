@@ -22,12 +22,13 @@ var foyer: Foyer
 var present := false
 var timer := FIRST_DELAY
 var stay_t := 0.0
-var pos := Vector2.ZERO          # poste du marchand (étage haut, à droite du hall)
+var pos := Vector2.ZERO          # poste du marchand (dans le hall, côté droit)
 
 func _init(w: WorldGrid, f: Foyer) -> void:
 	foyer = f
 	var ts := WorldGrid.TILE
-	pos = Vector2((w.exit_col() + 3) * ts + ts * 0.5, w.foyer_mid() * ts - 11.0)
+	var o := w.hall_origin()
+	pos = Vector2((o.x + WorldGrid.MOD_W - 3) * ts + ts * 0.5, (o.y + WorldGrid.MOD_H - 1) * ts - 11.0)
 
 # Avance d'un pas. Renvoie le message à afficher ("" si rien à signaler).
 func update(delta: float) -> String:
@@ -42,7 +43,7 @@ func update(delta: float) -> String:
 		if timer <= 0.0:
 			present = true
 			stay_t = STAY
-			return "CARAVANE AU FOYER ! Troc : [E] pres du marchand (etage haut)"
+			return "CARAVANE AU FOYER ! Troc : [E] pres du marchand (dans le hall)"
 	return ""
 
 func near(p: Vector2) -> bool:

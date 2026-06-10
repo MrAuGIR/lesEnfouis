@@ -16,7 +16,7 @@ const LAST_NAMES := ["Kovac", "Fersen", "Brodski", "Lemaire", "Volkov", "Marchal
 
 var world: WorldGrid
 var foyer: Foyer
-var npcs := []   # {"name", "travail", "garde": int, "cell": int (-1 libre), "pos", "dir", "pause"}
+var npcs := []   # {"name", "travail", "garde": int, "cell": Vector2i|null (pièce), "pos", "dir", "pause"}
 var arrival_timer := 0.0
 
 func _init(w: WorldGrid, f: Foyer) -> void:
@@ -35,31 +35,32 @@ func update(delta: float) -> String:
 		_walk(npc, delta)
 	return msg
 
-# --- Affectation ----------------------------------------------------------------
-func assigned_to(cell: int) -> Array:
+# --- Affectation (cell = coord. module de la pièce, ou null si libre) -------------
+func assigned_to(cell: Vector2i) -> Array:
 	var out := []
 	for i in npcs.size():
-		if int(npcs[i]["cell"]) == cell:
+		if npcs[i]["cell"] != null and Vector2i(npcs[i]["cell"]) == cell:
 			out.append(i)
 	return out
 
-func assign(i: int, cell: int) -> void:
+func assign(i: int, cell: Vector2i) -> void:
 	npcs[i]["cell"] = cell
 	npcs[i]["pause"] = 0.0
 
 func unassign(i: int) -> void:
-	npcs[i]["cell"] = -1
+	npcs[i]["cell"] = null
 
 # --- Arrivées ---------------------------------------------------------------------
 func _arrive() -> String:
 	var nm := "%s %s" % [FIRST_NAMES[randi() % FIRST_NAMES.size()],
 		LAST_NAMES[randi() % LAST_NAMES.size()]]
+	var o := world.hall_origin()
 	var npc := {
 		"name": nm,
 		"travail": randi_range(1, 3),
 		"garde": randi_range(1, 3),
-		"cell": -1,
-		"pos": Vector2(foyer.pos.x, world.foyer_y1() * WorldGrid.TILE - NPC_HALF.y),
+		"cell": null,
+		"pos": Vector2(foyer.pos.x, (o.y + WorldGrid.MOD_H - 1) * WorldGrid.TILE - NPC_HALF.y),
 		"dir": (1.0 if randf() < 0.5 else -1.0),
 		"pause": 1.5,
 	}
@@ -69,12 +70,11 @@ func _arrive() -> String:
 
 # --- Déambulation (grey-box : aller-retour sur le sol de sa zone) -----------------
 func _zone(npc: Dictionary) -> Rect2i:
-	var c := int(npc["cell"])
-	if c >= 0:
-		return foyer.cells[c]["rect"]
-	# PNJ libre : flâne au rez-de-chaussée (en évitant les caisses du coin gauche)
-	var x0 := world.foyer_x0() + 8
-	return Rect2i(x0, world.foyer_mid() + 1, world.foyer_x1() - x0, WorldGrid.FOYER_FLOOR_H)
+	if npc["cell"] != null:
+		return foyer.interior(Vector2i(npc["cell"]))
+	# PNJ libre : flâne dans le hall (en évitant les caisses du côté gauche)
+	var it := foyer.interior(Vector2i.ZERO)
+	return Rect2i(it.position + Vector2i(3, 0), Vector2i(it.size.x - 3, it.size.y))
 
 func _walk(npc: Dictionary, delta: float) -> void:
 	var z := _zone(npc)
