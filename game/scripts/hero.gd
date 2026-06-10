@@ -12,6 +12,16 @@ const MAX_HP := 100.0
 const FALL_SAFE := 380.0    # vitesse de chute sans dégât (px/s)
 const FALL_DMG := 0.25      # dégâts par unité de vitesse au-delà du seuil
 
+# Lampe frontale : carburant en secondes, rechargé au lithium (touche R).
+const LAMP_AUTONOMY := 240.0     # secondes d'autonomie pleine de la lampe
+const LAMP_LOW := 20.0           # sous ce reste (s), la lampe faiblit
+const LAMP_REFILL := 90.0        # secondes rendues par unité de lithium
+
+# Gaz toxique de surface : dégâts continus (DoT), immunité tant que l'éclairage
+# anti-pollution est activé ET qu'il reste des cartouches (charges limitées).
+const GAS_DPS := 9.0             # PV/s perdus dans le gaz sans protection
+const ANTIPOL_PER_CHARGE := 25.0 # secondes de protection par cartouche craftée
+
 var world: WorldGrid
 var pos := Vector2.ZERO           # centre du héros (monde)
 var vel := Vector2.ZERO
@@ -19,7 +29,11 @@ var half := Vector2(6, 14)        # demi-taille (~12x28 px ≈ 1,75 tuile)
 var on_floor := false
 var aim := Vector2.RIGHT          # direction du regard / de la lampe (vers la souris)
 var hp := MAX_HP
-var lamp_factor := 1.0            # 0..1 : intensité de la lampe (M0 : toujours pleine)
+var lamp_fuel := LAMP_AUTONOMY    # carburant restant (secondes)
+var lamp_factor := 1.0            # 0..1 : intensité de la lampe selon le carburant
+var antipol_fuel := 0.0           # secondes de protection anti-gaz restantes
+var antipol_on := false           # éclairage anti-pollution activé ?
+var was_in_gas := false           # pour signaler l'entrée dans la zone de gaz
 
 func _init(w: WorldGrid) -> void:
 	world = w
@@ -35,6 +49,46 @@ func spawn() -> void:
 
 func damage(amount: float) -> void:
 	hp = maxf(0.0, hp - amount)
+
+func deplete_lamp(delta: float) -> void:
+	lamp_fuel = maxf(0.0, lamp_fuel - delta)
+	lamp_factor = clampf(lamp_fuel / LAMP_LOW, 0.0, 1.0)
+
+# --- Gaz toxique de surface ---------------------------------------------------
+func in_gas() -> bool:
+	return int(floor(pos.y / WorldGrid.TILE)) < WorldGrid.GAS_FLOOR_ROW
+
+func antipol_charges() -> int:
+	return int(ceil(antipol_fuel / ANTIPOL_PER_CHARGE))
+
+# Renvoie le message à afficher ("" si rien à signaler).
+func toggle_antipol() -> String:
+	if antipol_fuel <= 0.0:
+		antipol_on = false
+		return "Aucune cartouche anti-gaz (craft a l'atelier : touche 4)"
+	antipol_on = not antipol_on
+	return "Anti-pollution : %s" % ("ACTIVE" if antipol_on else "coupe")
+
+# Avance le gaz d'un pas. Renvoie le message à afficher ("" si rien à signaler).
+func update_gas(delta: float) -> String:
+	var msg := ""
+	var inside := in_gas()
+	var protected := false
+	if inside and antipol_on and antipol_fuel > 0.0:
+		antipol_fuel = maxf(0.0, antipol_fuel - delta)
+		protected = true
+		if antipol_fuel <= 0.0:
+			antipol_on = false
+			msg = "Cartouches anti-gaz EPUISEES !"
+	if inside and not protected:
+		damage(GAS_DPS * delta)
+	if inside and not was_in_gas:
+		if protected:
+			msg = "Zone de gaz toxique : protection anti-pollution active"
+		else:
+			msg = "!! GAZ TOXIQUE !! Active l'anti-pollution (M) ou redescends"
+	was_in_gas = inside
+	return msg
 
 # Avance d'un pas de physique. controls=false fige les commandes (inventaire ouvert…).
 func move(delta: float, controls: bool) -> void:

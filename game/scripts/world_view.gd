@@ -9,11 +9,16 @@ const VIEW_RY := 22
 var world: WorldGrid
 var hero: Hero
 var light: LightField
+var crew: EnemyCrew
+var combat: Combat
+var camp: BaseCamp
 
-var base_pos := Vector2.ZERO
 var dig_target := Vector2i(-1, -1)
 var dig_frac := 0.0               # progression du creusage (0..1)
 var flashes := []                 # éclats de creusage : {cell:Vector2i, t:float}
+var cache_active := false         # cache de butin à dessiner (mort du héros)
+var cache_pos := Vector2.ZERO
+var cache_range := 2.0 * WorldGrid.TILE
 
 func add_flash(cell: Vector2i, dur: float) -> void:
 	flashes.append({"cell": cell, "t": dur})
@@ -77,6 +82,13 @@ func _draw() -> void:
 				col = c_hard
 			draw_rect(rect, Color(col.r * b, col.g * b, col.b * b))
 			draw_rect(rect, Color(0, 0, 0, 0.15 * b), false, 1.0)
+	# Voile de gaz toxique (gris-jaune) sur la zone de surface, au-dessus de GAS_FLOOR_ROW
+	var gas_top := float((pty - VIEW_RY) * ts)
+	var gas_bot := minf(float(WorldGrid.GAS_FLOOR_ROW * ts), float((pty + VIEW_RY) * ts))
+	if gas_bot > gas_top:
+		var gx := float((ptx - VIEW_RX) * ts)
+		var gw := float((VIEW_RX * 2) * ts)
+		draw_rect(Rect2(Vector2(gx, gas_top), Vector2(gw, gas_bot - gas_top)), Color(0.65, 0.62, 0.20, 0.16))
 	# Éclats de creusage (feedback de cassage)
 	for f in flashes:
 		var a: float = clampf(f.t / 0.18, 0.0, 1.0)
@@ -91,16 +103,54 @@ func _draw() -> void:
 		var tc := Vector2(c.x * ts + ts * 0.5, c.y * ts + ts * 0.5)
 		draw_circle(tc, LightField.TORCH_CORE * ts, Color(1.0, 0.7, 0.3, 0.12))
 		draw_rect(Rect2(tc + Vector2(-2, -5), Vector2(4, 10)), Color(1.0, 0.75, 0.35))
+	# Robots (visibles surtout sous la lumière — sinon silhouette à peine perceptible)
+	for e in crew.list:
+		var ep: Vector2 = e["pos"]
+		var eh := EnemyCrew.ENEMY_HALF
+		var vis: float = maxf(0.28, light.brightness(int(ep.x / ts), int(ep.y / ts)))
+		var ecol := Color(1.0, 0.95, 0.95) if float(e["flash"]) > 0.0 else Color(0.85, 0.30, 0.25)
+		draw_rect(Rect2(ep - eh, eh * 2.0), Color(ecol.r * vis, ecol.g * vis, ecol.b * vis))
+		draw_rect(Rect2(ep - eh, eh * 2.0), Color(0, 0, 0, 0.5 * vis), false, 1.0)
+		# "oeil" tourné vers le sens de marche
+		draw_rect(Rect2(ep + Vector2(float(e["dir"]) * 2.0 - 1.5, -3.0), Vector2(3, 3)), Color(1.0, 0.85, 0.4, vis))
+		if float(e["hp"]) < EnemyCrew.ENEMY_HP:
+			var w := eh.x * 2.0
+			var frac: float = clampf(float(e["hp"]) / EnemyCrew.ENEMY_HP, 0.0, 1.0)
+			draw_rect(Rect2(ep + Vector2(-eh.x, -eh.y - 5.0), Vector2(w, 2)), Color(0.25, 0.0, 0.0))
+			draw_rect(Rect2(ep + Vector2(-eh.x, -eh.y - 5.0), Vector2(w * frac, 2)), Color(0.95, 0.25, 0.25))
 	# Repères : base (départ, en profondeur) et sortie (objectif, en surface)
 	var font := ThemeDB.fallback_font
 	var ex := world.exit_col()
 	var exit_p := Vector2(ex * ts + ts * 0.5, world.surface[ex] * ts)
 	draw_rect(Rect2(exit_p + Vector2(-WorldGrid.EXIT_HALF * ts, -3), Vector2(WorldGrid.EXIT_HALF * 2 * ts, 3)), Color(0.95, 0.85, 0.3, 0.85))
 	draw_string(font, exit_p + Vector2(-14, -6), "SORTIE", HORIZONTAL_ALIGNMENT_LEFT, -1, 8, Color(1.0, 0.95, 0.55))
-	draw_circle(base_pos, 2.6 * ts, Color(0.3, 0.9, 0.4, 0.08))
-	draw_rect(Rect2(base_pos + Vector2(-9, -3), Vector2(18, 6)), Color(0.3, 0.85, 0.4))
-	draw_string(font, base_pos + Vector2(-12, -7), "BASE", HORIZONTAL_ALIGNMENT_LEFT, -1, 7, Color(0.6, 1.0, 0.7))
+	draw_circle(camp.pos, BaseCamp.BASE_RANGE, Color(0.3, 0.9, 0.4, 0.08))
+	draw_rect(Rect2(camp.pos + Vector2(-9, -3), Vector2(18, 6)), Color(0.3, 0.85, 0.4))
+	draw_string(font, camp.pos + Vector2(-12, -7), "BASE", HORIZONTAL_ALIGNMENT_LEFT, -1, 7, Color(0.6, 1.0, 0.7))
+	# Bâtiments construits (avec étiquettes)
+	if camp.has_prod:
+		var pr := camp.pos + Vector2(-3.6 * ts, -2.0 * ts)
+		draw_rect(Rect2(pr, Vector2(2.4 * ts, 2.0 * ts)), Color(0.25, 0.45, 0.70))
+		draw_rect(Rect2(pr + Vector2(0.9 * ts, 1.0 * ts), Vector2(6, 12)), Color(0.95, 0.9, 0.65))  # PNJ
+		draw_string(font, pr + Vector2(1, -2), "PROD", HORIZONTAL_ALIGNMENT_LEFT, -1, 7, Color(0.7, 0.85, 1.0))
+	if camp.has_workshop:
+		var ws := camp.pos + Vector2(1.2 * ts, -2.0 * ts)
+		draw_rect(Rect2(ws, Vector2(2.4 * ts, 2.0 * ts)), Color(0.60, 0.45, 0.25))
+		draw_string(font, ws + Vector2(1, -2), "ATELIER", HORIZONTAL_ALIGNMENT_LEFT, -1, 7, Color(1.0, 0.85, 0.6))
+	# Cache de butin (déposée à la mort, à récupérer)
+	if cache_active:
+		draw_circle(cache_pos, cache_range, Color(0.95, 0.75, 0.25, 0.16))
+		draw_rect(Rect2(cache_pos + Vector2(-4, -4), Vector2(8, 8)), Color(0.95, 0.8, 0.3))
 	# Halo central + héros (le héros porte la lumière ; le halo faiblit avec le carburant)
 	draw_circle(hero.pos, LightField.LAMP_AMBIENT_CORE * ts, Color(1.0, 0.93, 0.78, 0.07 * hero.lamp_factor))
 	draw_rect(Rect2(hero.pos - hero.half, hero.half * 2.0), Color(0.95, 0.85, 0.5))
 	draw_rect(Rect2(hero.pos - hero.half, hero.half * 2.0), Color(0.2, 0.15, 0.05, 0.8), false, 1.0)
+	# Arc de coup (feedback du clic droit, mêlée)
+	if combat.atk_t > 0.0:
+		var aa: float = clampf(combat.atk_t / Combat.MELEE_VIS, 0.0, 1.0)
+		draw_circle(hero.pos + hero.aim * Combat.MELEE_RANGE * 0.55, Combat.MELEE_RANGE * 0.5, Color(1.0, 1.0, 1.0, 0.20 * aa))
+	# Traceur de tir (arme à feu)
+	if combat.tracer_t > 0.0:
+		var ta: float = clampf(combat.tracer_t / Combat.GUN_TRACER_T, 0.0, 1.0)
+		draw_line(combat.tracer_a, combat.tracer_b, Color(1.0, 0.9, 0.4, 0.5 + 0.4 * ta), 1.5)
+		draw_circle(combat.tracer_b, 2.5, Color(1.0, 0.85, 0.4, ta))

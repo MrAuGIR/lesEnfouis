@@ -30,6 +30,7 @@ const BASE_DEPTH := AIR_ROWS + 58 # profondeur de la base / point de départ (zo
 const BAND_TOP := AIR_ROWS + 30   # barrière de roche dense ENTRE la base et la surface (gate : outil Fer)
 const BAND_H := 4                 # épaisseur de la barrière (tuiles)
 const EXIT_HALF := 4              # demi-largeur de la zone de SORTIE en surface (tuiles)
+const GAS_FLOOR_ROW := AIR_ROWS + 20  # tuiles AU-DESSUS de cette rangée = zone de gaz toxique
 
 const ROCK_MULT := 2.5            # la roche se creuse plus lentement
 const HARD_MULT := 4.5            # creusage de la roche dense (très lent)
