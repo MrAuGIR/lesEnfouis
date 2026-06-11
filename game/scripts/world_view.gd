@@ -87,14 +87,18 @@ func _set_occluder(i: int, r: Rect2) -> void:
 		r.position, Vector2(r.end.x, r.position.y), r.end, Vector2(r.position.x, r.end.y)])
 
 # --- Dessin -------------------------------------------------------------------
+# Palette des blocs (partagée avec l'éclairage de face de marker_view.gd)
+static func tile_color(t: int) -> Color:
+	match t:
+		WorldGrid.ROCK: return Color(0.40, 0.42, 0.46)
+		WorldGrid.WOOD: return Color(0.55, 0.38, 0.15)
+		WorldGrid.LITHIUM: return Color(0.45, 0.74, 0.80)
+		WorldGrid.WALL: return Color(0.30, 0.34, 0.42)
+		WorldGrid.HARDROCK: return Color(0.18, 0.20, 0.26)
+	return Color(0.42, 0.30, 0.20)   # terre
+
 func _draw() -> void:
 	var ts := WorldGrid.TILE
-	var c_dirt := Color(0.42, 0.30, 0.20)
-	var c_rock := Color(0.40, 0.42, 0.46)
-	var c_wood := Color(0.55, 0.38, 0.15)
-	var c_lith := Color(0.45, 0.74, 0.80)
-	var c_wall := Color(0.30, 0.34, 0.42)
-	var c_hard := Color(0.18, 0.20, 0.26)
 	var ptx := int(hero.pos.x / ts)
 	var pty := int(hero.pos.y / ts)
 	# Fond : caverne (révélé par la lampe) + bandes de ciel au-dessus du relief
@@ -134,18 +138,7 @@ func _draw() -> void:
 				draw_rect(Rect2(tx * ts, ty * ts + 10, ts, 1), Color(0.24, 0.16, 0.06))
 				draw_rect(rect, Color(0.7, 0.55, 0.28, 0.8), false, 1.0)
 				continue
-			var col := c_dirt
-			if t == WorldGrid.ROCK:
-				col = c_rock
-			elif t == WorldGrid.WOOD:
-				col = c_wood
-			elif t == WorldGrid.LITHIUM:
-				col = c_lith
-			elif t == WorldGrid.WALL:
-				col = c_wall
-			elif t == WorldGrid.HARDROCK:
-				col = c_hard
-			draw_rect(rect, col)
+			draw_rect(rect, tile_color(t))
 			draw_rect(rect, Color(0, 0, 0, 0.15), false, 1.0)
 	# Torches posées (le bâton ; la lumière vient de lights.gd)
 	for c in light.torches:

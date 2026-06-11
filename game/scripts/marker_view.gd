@@ -16,6 +16,7 @@ const ROOM_LABELS := ["DORTOIR", "PROD. RATIONS", "ATELIER", "ENTREPOT", "HALL"]
 
 var world: WorldGrid
 var hero: Hero
+var light: LightField
 var foyer: Foyer
 var pop: Population
 var caravan: Caravan
@@ -31,6 +32,10 @@ var cache_range := 2.0 * WorldGrid.TILE
 var build_room := -1              # mode placement : type de pièce en cours (-1 = aucun)
 var build_slots := []             # mode placement : slots valides (Array de Rect2, px monde)
 
+func _light_passes(tx: int, ty: int) -> bool:
+	var t := world.tile(tx, ty)
+	return t == WorldGrid.EMPTY or t == WorldGrid.LADDER or t == WorldGrid.PASSERELLE
+
 func add_flash(cell: Vector2i, dur: float) -> void:
 	flashes.append({"cell": cell, "t": dur})
 
@@ -45,6 +50,23 @@ func _draw() -> void:
 	var font := ThemeDB.fallback_font
 	var ptx := int(hero.pos.x / ts)
 	var pty := int(hero.pos.y / ts)
+	# Éclairage de FACE : la lumière GPU s'arrête au premier bloc (ombres), on
+	# redessine donc la première couche de blocs dans sa couleur, à l'intensité
+	# de la lumière reçue — le joueur devine ce qu'il va miner.
+	for ty in range(pty - WorldView.VIEW_RY, pty + WorldView.VIEW_RY):
+		for tx in range(ptx - WorldView.VIEW_RX, ptx + WorldView.VIEW_RX):
+			var t := world.tile(tx, ty)
+			if t == WorldGrid.EMPTY or t == WorldGrid.LADDER or t == WorldGrid.PASSERELLE:
+				continue
+			if not (_light_passes(tx - 1, ty) or _light_passes(tx + 1, ty) \
+					or _light_passes(tx, ty - 1) or _light_passes(tx, ty + 1)):
+				continue   # bloc enfoui : il reste dans l'ombre
+			var v := light.face_light(tx, ty)
+			if v <= 0.04:
+				continue
+			var col := WorldView.tile_color(t)
+			draw_rect(Rect2(tx * ts, ty * ts, ts, ts), Color(col.r, col.g, col.b, v * 0.85))
+			draw_rect(Rect2(tx * ts, ty * ts, ts, ts), Color(0, 0, 0, 0.15 * v), false, 1.0)
 	# Voile de gaz toxique (info de zone) au-dessus de GAS_FLOOR_ROW
 	var gas_top := float((pty - WorldView.VIEW_RY) * ts)
 	var gas_bot := minf(float(WorldGrid.GAS_FLOOR_ROW * ts), float((pty + WorldView.VIEW_RY) * ts))

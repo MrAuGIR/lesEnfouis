@@ -57,6 +57,7 @@ func _ready() -> void:
 	light = LightField.new(world, hero)
 	bag = Inventory.new()
 	foyer = Foyer.new(world)
+	light.foyer = foyer   # éclairage de face : les pièces comptent comme source
 	pop = Population.new(world, foyer)
 	caravan = Caravan.new(world, foyer)
 	crew = EnemyCrew.new(world, light, hero)
@@ -80,6 +81,7 @@ func _ready() -> void:
 	marker = MarkerView.new()
 	marker.world = world
 	marker.hero = hero
+	marker.light = light
 	marker.foyer = foyer
 	marker.pop = pop
 	marker.caravan = caravan
