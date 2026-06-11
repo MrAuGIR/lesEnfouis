@@ -95,6 +95,18 @@ func add_room_light(center: Vector2) -> void:
 	r.position = center
 	add_child(r)
 
+# Lueur générique SANS ombre (ex. : PNJ légendaire repérable de loin). Renvoie le
+# nœud pour pouvoir l'éteindre (queue_free) quand la source disparaît.
+func add_glow(pos: Vector2, color: Color, scale_f: float, energy: float) -> PointLight2D:
+	var g := PointLight2D.new()
+	g.texture = radial
+	g.texture_scale = scale_f
+	g.color = color
+	g.energy = energy
+	g.position = pos
+	add_child(g)
+	return g
+
 # --- Textures générées (grey-box : pas d'assets) ----------------------------------
 static func _make_radial() -> Texture2D:
 	var g := Gradient.new()

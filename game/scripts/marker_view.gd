@@ -31,6 +31,7 @@ var cache_pos := Vector2.ZERO
 var cache_range := 2.0 * WorldGrid.TILE
 var build_room := -1              # mode placement : type de pièce en cours (-1 = aucun)
 var build_slots := []             # mode placement : slots valides (Array de Rect2, px monde)
+var loot_cell := Vector2i(-1, -1) # conteneur fouillable à portée ([E]), -1 sinon
 
 func _light_passes(tx: int, ty: int) -> bool:
 	var t := world.tile(tx, ty)
@@ -109,16 +110,39 @@ func _draw() -> void:
 	if cache_active:
 		draw_circle(cache_pos, cache_range, Color(0.95, 0.75, 0.25, 0.16))
 		draw_rect(Rect2(cache_pos + Vector2(-4, -4), Vector2(8, 8)), Color(0.95, 0.8, 0.3))
-	# Robots : œil luisant dans le noir + jauge de PV
+	# Ennemis : repère luisant dans le noir (œil robot / frontale de pilleur) + jauge de PV
 	for e in crew.list:
 		var ep: Vector2 = e["pos"]
-		var eh := EnemyCrew.ENEMY_HALF
-		draw_rect(Rect2(ep + Vector2(float(e["dir"]) * 2.0 - 1.5, -3.0), Vector2(3, 3)), Color(1.0, 0.25, 0.15, 0.95))
-		if float(e["hp"]) < EnemyCrew.ENEMY_HP:
+		var eh: Vector2 = e["half"]
+		var kind := int(e["kind"])
+		if kind == EnemyCrew.KIND_ROBOT:
+			draw_rect(Rect2(ep + Vector2(float(e["dir"]) * 2.0 - 1.5, -3.0), Vector2(3, 3)), Color(1.0, 0.25, 0.15, 0.95))
+		elif kind == EnemyCrew.KIND_LOURD:   # visière rouge du Lourd
+			draw_rect(Rect2(ep + Vector2(float(e["dir"]) * 3.0 - 2.5, -eh.y + 2.0), Vector2(5, 2)), Color(1.0, 0.2, 0.1, 0.95))
+		else:   # frontale des pilleurs (ils explorent aussi dans le noir)
+			draw_rect(Rect2(ep + Vector2(float(e["dir"]) * 3.0 - 1.0, -eh.y + 2.0), Vector2(2, 2)), Color(1.0, 0.85, 0.5, 0.95))
+		if float(e["hp"]) < float(e["max_hp"]):
 			var w := eh.x * 2.0
-			var frac: float = clampf(float(e["hp"]) / EnemyCrew.ENEMY_HP, 0.0, 1.0)
+			var frac: float = clampf(float(e["hp"]) / float(e["max_hp"]), 0.0, 1.0)
 			draw_rect(Rect2(ep + Vector2(-eh.x, -eh.y - 5.0), Vector2(w, 2)), Color(0.25, 0.0, 0.0))
 			draw_rect(Rect2(ep + Vector2(-eh.x, -eh.y - 5.0), Vector2(w * frac, 2)), Color(0.95, 0.25, 0.25))
+	# Tirs des pilleurs (traceurs)
+	for s in crew.shots:
+		var sa: float = clampf(float(s.t) / 0.12, 0.0, 1.0)
+		draw_line(s.a, s.b, Color(1.0, 0.45, 0.25, 0.4 + 0.5 * sa), 1.2)
+	# Légendaires captifs : étiquette + invite de libération
+	for c in pop.captives:
+		var cp: Vector2 = c["pos"]
+		var near := hero.pos.distance_to(cp) <= 2.0 * ts
+		var lbl := "[E] LIBERER" if near else "PRISONNIER"
+		var lw := font.get_string_size(lbl, HORIZONTAL_ALIGNMENT_LEFT, -1, 7).x
+		draw_string(font, cp + Vector2(-lw * 0.5, -Population.NPC_HALF.y - 4.0), lbl,
+			HORIZONTAL_ALIGNMENT_LEFT, -1, 7, Color(1.0, 0.9, 0.5, 0.95))
+	# Conteneur fouillable à portée
+	if loot_cell.x >= 0:
+		draw_rect(Rect2(loot_cell.x * ts, loot_cell.y * ts, ts, ts), Color(1.0, 0.9, 0.5, 0.8), false, 1.0)
+		draw_string(font, Vector2(loot_cell.x * ts - 8, loot_cell.y * ts - 4), "[E] FOUILLER",
+			HORIZONTAL_ALIGNMENT_LEFT, -1, 7, Color(1.0, 0.9, 0.5))
 	# Noms des PNJ
 	for npc in pop.npcs:
 		var np: Vector2 = npc["pos"]

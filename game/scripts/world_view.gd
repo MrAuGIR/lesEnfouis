@@ -87,6 +87,13 @@ func _set_occluder(i: int, r: Rect2) -> void:
 		r.position, Vector2(r.end.x, r.position.y), r.end, Vector2(r.position.x, r.end.y)])
 
 # --- Dessin -------------------------------------------------------------------
+static func _enemy_color(kind: int) -> Color:
+	match kind:
+		EnemyCrew.KIND_FONCEUR: return Color(0.72, 0.48, 0.32)   # cuir de pilleur
+		EnemyCrew.KIND_TIREUR: return Color(0.55, 0.58, 0.38)    # treillis olive
+		EnemyCrew.KIND_LOURD: return Color(0.45, 0.48, 0.55)     # acier
+	return Color(0.85, 0.30, 0.25)                               # robot
+
 # Palette des blocs (partagée avec l'éclairage de face de marker_view.gd)
 static func tile_color(t: int) -> Color:
 	match t:
@@ -95,6 +102,9 @@ static func tile_color(t: int) -> Color:
 		WorldGrid.LITHIUM: return Color(0.45, 0.74, 0.80)
 		WorldGrid.WALL: return Color(0.30, 0.34, 0.42)
 		WorldGrid.HARDROCK: return Color(0.18, 0.20, 0.26)
+		WorldGrid.IRON: return Color(0.58, 0.40, 0.30)
+		WorldGrid.CRATE: return Color(0.52, 0.38, 0.18)
+		WorldGrid.CRATE_OPEN: return Color(0.30, 0.25, 0.15)
 	return Color(0.42, 0.30, 0.20)   # terre
 
 func _draw() -> void:
@@ -138,24 +148,63 @@ func _draw() -> void:
 				draw_rect(Rect2(tx * ts, ty * ts + 10, ts, 1), Color(0.24, 0.16, 0.06))
 				draw_rect(rect, Color(0.7, 0.55, 0.28, 0.8), false, 1.0)
 				continue
+			if t == WorldGrid.CRATE or t == WorldGrid.CRATE_OPEN:
+				# Conteneur (fouillable [E] ; ouvert = vidé) : caisse à planches croisées
+				draw_rect(rect, tile_color(t))
+				var edge := Color(0.28, 0.20, 0.08) if t == WorldGrid.CRATE else Color(0.18, 0.14, 0.07)
+				draw_rect(rect, edge, false, 2.0)
+				if t == WorldGrid.CRATE:
+					draw_line(Vector2(tx * ts + 2, ty * ts + 2), Vector2(tx * ts + ts - 2, ty * ts + ts - 2), edge, 1.5)
+					draw_line(Vector2(tx * ts + ts - 2, ty * ts + 2), Vector2(tx * ts + 2, ty * ts + ts - 2), edge, 1.5)
+				else:
+					draw_rect(Rect2(tx * ts + 3, ty * ts + 3, ts - 6, 4), Color(0.08, 0.07, 0.05))
+				continue
 			draw_rect(rect, tile_color(t))
+			if t == WorldGrid.IRON:   # nodules de fer dans la roche
+				draw_rect(Rect2(tx * ts + 3, ty * ts + 4, 4, 4), Color(0.78, 0.55, 0.40))
+				draw_rect(Rect2(tx * ts + 9, ty * ts + 9, 4, 4), Color(0.78, 0.55, 0.40))
 			draw_rect(rect, Color(0, 0, 0, 0.15), false, 1.0)
+	# Rails du métro (Transit) : posés sur le sol des tunnels, clippés à la vue
+	for m in world.metro_rects:
+		var mr: Rect2i = m
+		var fy := float(mr.position.y + mr.size.y) * ts   # haut de la rangée du sol
+		var rx0 := maxi(mr.position.x, ptx - VIEW_RX) * ts
+		var rx1 := mini(mr.position.x + mr.size.x, ptx + VIEW_RX) * ts
+		if rx1 <= rx0 or fy < (pty - VIEW_RY) * ts or fy > (pty + VIEW_RY) * ts:
+			continue
+		var tie_x := rx0 - (int(rx0) % 10)
+		while tie_x < rx1:   # traverses
+			draw_rect(Rect2(tie_x, fy - 2.0, 5.0, 2.0), Color(0.32, 0.24, 0.14))
+			tie_x += 10.0
+		draw_rect(Rect2(rx0, fy - 3.5, rx1 - rx0, 1.5), Color(0.55, 0.58, 0.62))
 	# Torches posées (le bâton ; la lumière vient de lights.gd)
 	for c in light.torches:
 		var tc := Vector2(c.x * ts + ts * 0.5, c.y * ts + ts * 0.5)
 		draw_rect(Rect2(tc + Vector2(-2, -5), Vector2(4, 10)), Color(1.0, 0.75, 0.35))
-	# Robots (dans le noir : presque invisibles — leurs yeux luisent, cf. marker_view)
+	# Ennemis (dans le noir : presque invisibles — leurs repères luisent, cf. marker_view)
 	for e in crew.list:
 		var ep: Vector2 = e["pos"]
-		var eh := EnemyCrew.ENEMY_HALF
-		var ecol := Color(1.0, 0.95, 0.95) if float(e["flash"]) > 0.0 else Color(0.85, 0.30, 0.25)
+		var eh: Vector2 = e["half"]
+		var kind := int(e["kind"])
+		var ecol := _enemy_color(kind)
+		if float(e["flash"]) > 0.0:
+			ecol = Color(1.0, 0.95, 0.95)
 		draw_rect(Rect2(ep - eh, eh * 2.0), ecol)
 		draw_rect(Rect2(ep - eh, eh * 2.0), Color(0, 0, 0, 0.5), false, 1.0)
+		if kind == EnemyCrew.KIND_LOURD:
+			# Plaque de blindage du côté qu'il regarde (le dos est le point faible)
+			var fx := ep.x + float(e["dir"]) * eh.x - (3.0 if float(e["dir"]) > 0.0 else 0.0)
+			draw_rect(Rect2(fx, ep.y - eh.y, 3.0, eh.y * 2.0), Color(0.22, 0.24, 0.30))
 	# PNJ du Foyer
 	for npc in pop.npcs:
 		var np: Vector2 = npc["pos"]
 		draw_rect(Rect2(np - Population.NPC_HALF, Population.NPC_HALF * 2.0), Color(0.62, 0.78, 0.92))
 		draw_rect(Rect2(np - Population.NPC_HALF, Population.NPC_HALF * 2.0), Color(0, 0, 0, 0.5), false, 1.0)
+	# Légendaires captifs (dorés — leur lueur vient de lights.gd)
+	for c in pop.captives:
+		var cp: Vector2 = c["pos"]
+		draw_rect(Rect2(cp - Population.NPC_HALF, Population.NPC_HALF * 2.0), Color(0.95, 0.82, 0.40))
+		draw_rect(Rect2(cp - Population.NPC_HALF, Population.NPC_HALF * 2.0), Color(0.4, 0.3, 0.05, 0.8), false, 1.0)
 	# La caravane (le marchand)
 	if caravan.present:
 		draw_rect(Rect2(caravan.pos - Vector2(7, 11), Vector2(14, 22)), Color(0.85, 0.65, 0.30))

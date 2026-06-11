@@ -18,6 +18,9 @@ const WALL := 5    # béton d'un bunker abandonné (creusable, sans ressource : 
 const HARDROCK := 6 # roche dense (barrière) : nécessite l'outil Fer (niveau >= 1)
 const LADDER := 7   # échelle (construite en bois) : on grimpe dessus
 const PASSERELLE := 9  # plancher de bois construit (1 bois = 1 bloc) — l'id 8 est réservé aux rations
+const IRON := 10    # minerai de fer (roche du Transit) → outil Fer, équipement
+const CRATE := 11   # conteneur à fouiller ([E] : loot aléatoire, une seule fois)
+const CRATE_OPEN := 12 # conteneur déjà fouillé (vide, reste en décor)
 
 # Bunkers abandonnés (seule source de bois : structures humaines, pas le sol)
 const STRUCT_COUNT := 60
@@ -36,6 +39,17 @@ const GAS_FLOOR_ROW := AIR_ROWS + 20  # tuiles AU-DESSUS de cette rangée = zone
 const ROCK_MULT := 2.5            # la roche se creuse plus lentement
 const HARD_MULT := 4.5            # creusage de la roche dense (très lent)
 
+# Zone TRANSIT (M3) : la tranche entre la barrière et le Foyer — anciens tunnels
+# de métro (axes horizontaux traversants) ponctués de stations (quai, rame
+# échouée, conteneurs à fouiller). Territoire des pilleurs ; les robots, eux,
+# rôdent AU-DESSUS de la barrière (zone de gaz + surface).
+const TRANSIT_TOP := BAND_TOP + BAND_H    # 1re rangée sous la barrière
+const TRANSIT_BOT := BASE_DEPTH - 6       # dernière rangée avant le toit du Foyer
+const METRO_H := 4                        # hauteur intérieure d'un tunnel (tuiles)
+const STATION_W := 16                     # intérieur d'une station
+const STATION_H := 7
+const IRON_CHANCE := 0.16                 # part de la roche du Transit en filons de fer
+
 # Le Foyer (M2) : pièces construites librement sur une grille de MODULES au
 # gabarit unique (intérieur 8x5, murs mitoyens partagés). Seul le hall de départ
 # est préconstruit ; le reste se bâtit en jeu (cf. foyer.gd).
@@ -46,6 +60,9 @@ const PITCH_Y := MOD_H - 1
 
 var grid := PackedByteArray()
 var surface := PackedInt32Array() # hauteur du terrain par colonne (lumière du ciel)
+var metro_rects: Array[Rect2i] = []  # intérieurs des tunnels de métro (Transit)
+var stations: Array[Rect2i] = []     # intérieurs des stations de métro
+var captive_spots := []              # PNJ légendaires : {"cell": Vector2i, "guarded": bool}
 
 func generate() -> void:
 	grid.resize(GRID_W * GRID_H)
@@ -82,12 +99,16 @@ func generate() -> void:
 					var thresh := 0.5 - clampf(depth / 120.0, 0.0, 0.3)
 					if rock_noise.get_noise_2d(float(x), float(y)) > thresh:
 						t = ROCK
+					# Fer : filons dans la roche du Transit (équipement — GDD 06)
+					if t == ROCK and y >= TRANSIT_TOP and y <= TRANSIT_BOT and randf() < IRON_CHANCE:
+						t = IRON
 					# Lithium : petits dépôts, plus fréquents dans la roche
 					var lith_chance := 0.10 if t == ROCK else 0.02
 					if randf() < lith_chance:
 						t = LITHIUM
 			grid[y * GRID_W + x] = t
 	_place_structures()
+	_place_transit()
 	_place_hall()
 	_place_barrier_and_exit()
 
@@ -125,6 +146,73 @@ func _carve_structure(x0: int, y0: int, w: int, h: int) -> void:
 
 func exit_col() -> int:
 	return int(GRID_W * 0.5)
+
+# --- Zone Transit (M3) : axes de métro, stations, conteneurs, légendaires ---------
+func _place_transit() -> void:
+	metro_rects = []
+	stations = []
+	captive_spots = []
+	# Deux axes de métro traversant la zone (rangées fixes : leurs stations
+	# s'imbriquent sans conflit — le sol du 1er axe sert de plafond aux stations du 2e).
+	for iy in [TRANSIT_TOP + 4, TRANSIT_TOP + 12]:
+		var x0 := randi_range(3, 10)
+		var x1 := GRID_W - 1 - randi_range(3, 10)
+		for x in range(x0, x1 + 1):
+			grid[(iy - 1) * GRID_W + x] = WALL          # plafond béton
+			grid[(iy + METRO_H) * GRID_W + x] = WALL    # sol béton (les rails)
+			for y in range(iy, iy + METRO_H):
+				grid[y * GRID_W + x] = EMPTY
+		metro_rects.append(Rect2i(x0, iy, x1 - x0 + 1, METRO_H))
+		# Gravats (se sautent) et conteneurs épars le long des rails
+		for n in 10:
+			var gx := randi_range(x0 + 4, x1 - 4)
+			grid[(iy + METRO_H - 1) * GRID_W + gx] = DIRT if randf() < 0.7 else CRATE
+		# Deux stations par axe, une dans chaque moitié
+		var mid := (x0 + x1) / 2
+		_carve_station(randi_range(x0 + 6, mid - STATION_W - 4), iy)
+		_carve_station(randi_range(mid + 4, x1 - STATION_W - 6), iy)
+	# Légendaire n°1 : prisonnier de la DERNIÈRE station (la mieux gardée) — sur le quai.
+	var st: Rect2i = stations[stations.size() - 1]
+	captive_spots.append({"cell": Vector2i(st.position.x + 3, st.position.y + st.size.y - 2),
+		"guarded": true})
+	# Légendaire n°2 : terré dans un petit bunker caché juste sous la barrière,
+	# loin des stations — il faut le TROUVER en creusant (récompense d'exploration).
+	for n in 80:
+		var bx := randi_range(6, GRID_W - 16)
+		var clear := absi(bx - exit_col()) > 14   # pas au-dessus du Foyer
+		for s in stations:
+			if bx + 8 >= s.position.x - 2 and bx <= s.position.x + s.size.x + 2:
+				clear = false
+		if not clear:
+			continue
+		_carve_structure(bx, TRANSIT_TOP, 8, 4)
+		grid[(TRANSIT_TOP + 2) * GRID_W + bx + 5] = CRATE
+		captive_spots.append({"cell": Vector2i(bx + 2, TRANSIT_TOP + 1), "guarded": false})
+		break
+
+func _carve_station(sx: int, tunnel_iy: int) -> void:
+	# Une station : grande salle béton que le tunnel traverse — quai surélevé
+	# (moitié gauche), rame échouée sur les rails, conteneurs à fouiller.
+	var fy := tunnel_iy + METRO_H            # rangée du sol (béton)
+	var top := fy - STATION_H                # 1re rangée intérieure
+	for y in range(top - 1, fy + 1):
+		for x in range(sx - 1, sx + STATION_W + 1):
+			var border := x == sx - 1 or x == sx + STATION_W or y == top - 1 or y == fy
+			grid[y * GRID_W + x] = WALL if border else EMPTY
+	for y in range(tunnel_iy, tunnel_iy + METRO_H):   # le tunnel traverse les murs
+		grid[y * GRID_W + sx - 1] = EMPTY
+		grid[y * GRID_W + sx + STATION_W] = EMPTY
+	var qy := fy - 1                          # quai : un cran au-dessus des rails
+	for x in range(sx, sx + STATION_W / 2):
+		grid[qy * GRID_W + x] = WALL
+	grid[(qy - 1) * GRID_W + sx + 1] = CRATE  # conteneurs sur le quai
+	grid[(qy - 1) * GRID_W + sx + 4] = CRATE
+	var rx := sx + STATION_W / 2 + 2          # rame échouée (bloc 5x2 sur les rails)
+	for x in range(rx, rx + 5):
+		grid[(fy - 1) * GRID_W + x] = WALL
+		grid[(fy - 2) * GRID_W + x] = WALL
+	grid[(fy - 1) * GRID_W + sx + STATION_W - 2] = CRATE
+	stations.append(Rect2i(sx, top, STATION_W, STATION_H))
 
 # --- Le Foyer (géométrie de la grille de modules, partagée avec foyer.gd) -------
 func hall_origin() -> Vector2i:   # coin haut-gauche (tuiles) du module HALL de départ
@@ -176,11 +264,12 @@ func is_ladder_crossing(tx: int, ty: int) -> bool:
 func is_diggable(tx: int, ty: int) -> bool:
 	var t := tile(tx, ty)
 	return t == DIRT or t == ROCK or t == WOOD or t == LITHIUM or t == WALL \
-		or t == HARDROCK or t == PASSERELLE
+		or t == HARDROCK or t == PASSERELLE or t == IRON
+	# (les conteneurs CRATE ne se creusent pas : ils se FOUILLENT, touche E)
 
 func dig_mult(t: int) -> float:
 	if t == HARDROCK:
 		return HARD_MULT
-	if t == ROCK or t == LITHIUM or t == WALL:
+	if t == ROCK or t == LITHIUM or t == WALL or t == IRON:
 		return ROCK_MULT
 	return 1.0

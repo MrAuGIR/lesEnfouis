@@ -18,6 +18,9 @@ const START_AMMO := 24           # munitions de départ — CONFORT DE TEST (à 
 const ENEMY_LOOT := 3            # lithium (batteries) lâché à la mort d'un robot
 const ENEMY_AMMO_DROP := 2       # munitions lâchées par un robot (avec une probabilité)
 const ENEMY_AMMO_CHANCE := 0.6   # probabilité qu'un robot lâche des munitions
+const PILLEUR_LOOT := 2          # ferraille lâchée par un pilleur/tireur
+const LOURD_LOOT := 6            # ferraille du Lourd (carcasse blindée)
+const LOURD_AMMO := 6            # munitions garanties sur le Lourd
 
 var hero: Hero
 var world: WorldGrid
@@ -70,8 +73,7 @@ func _melee_attack() -> void:
 		var v: Vector2 = e["pos"] - hero.pos
 		var d := v.length()
 		if d <= MELEE_RANGE and (d < 0.001 or v.normalized().dot(hero.aim) >= MELEE_ARC):
-			e["hp"] = float(e["hp"]) - MELEE_DMG
-			e["flash"] = MELEE_VIS
+			EnemyCrew.hurt(e, MELEE_DMG, hero.pos.x)
 			e["vel"] += hero.aim * MELEE_KNOCK
 	_cull()
 
@@ -101,15 +103,14 @@ func _gun_fire() -> void:
 		if proj <= 0.0 or proj > target_d:
 			continue
 		var perp := (to_e - hero.aim * proj).length()
-		if perp <= EnemyCrew.ENEMY_HALF.y + 3.0:
+		if perp <= (e["half"] as Vector2).y + 3.0:
 			target = e
 			target_d = proj
 	tracer_a = hero.pos
 	tracer_b = hero.pos + hero.aim * target_d
 	tracer_t = GUN_TRACER_T
 	if target != null:
-		target["hp"] = float(target["hp"]) - GUN_DMG
-		target["flash"] = MELEE_VIS
+		EnemyCrew.hurt(target, GUN_DMG, hero.pos.x)
 		_cull()
 
 func _cull() -> void:
@@ -118,15 +119,28 @@ func _cull() -> void:
 	for e in crew.list:
 		if float(e["hp"]) > 0.0:
 			alive.append(e)
-		else:
+			continue
+		view.add_flash(Vector2i(int(e["pos"].x / ts), int(e["pos"].y / ts)), 0.3)
+		var kind := int(e["kind"])
+		var got_ammo := 0
+		var lootmsg := ""
+		if kind == EnemyCrew.KIND_ROBOT:
 			bag.add(WorldGrid.LITHIUM, ENEMY_LOOT)
-			view.add_flash(Vector2i(int(e["pos"].x / ts), int(e["pos"].y / ts)), 0.3)
-			var got_ammo := 0
+			lootmsg = "+%d lithium" % ENEMY_LOOT
 			if randf() < ENEMY_AMMO_CHANCE:
 				got_ammo = ENEMY_AMMO_DROP
-				ammo += got_ammo
-			if got_ammo > 0:
-				hud.flash("Robot detruit (+%d lithium, +%d munitions)" % [ENEMY_LOOT, got_ammo])
-			else:
-				hud.flash("Robot detruit (+%d lithium)" % ENEMY_LOOT)
+		elif kind == EnemyCrew.KIND_LOURD:
+			bag.add(Inventory.FERRAILLE, LOURD_LOOT)
+			lootmsg = "+%d ferraille" % LOURD_LOOT
+			got_ammo = LOURD_AMMO
+		else:
+			bag.add(Inventory.FERRAILLE, PILLEUR_LOOT)
+			lootmsg = "+%d ferraille" % PILLEUR_LOOT
+			if randf() < 0.5:
+				got_ammo = ENEMY_AMMO_DROP
+		ammo += got_ammo
+		if got_ammo > 0:
+			lootmsg += ", +%d munitions" % got_ammo
+		var verb := "detruit" if kind == EnemyCrew.KIND_ROBOT else "abattu"
+		hud.flash("%s %s (%s)" % [EnemyCrew.KIND_NAMES[kind], verb, lootmsg])
 	crew.list = alive
