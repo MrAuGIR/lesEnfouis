@@ -25,6 +25,8 @@ var caravan: Caravan
 var crew: EnemyCrew
 var combat: Combat
 var view: WorldView
+var marker: MarkerView
+var lights: LightRig
 var camera: Camera2D
 var hud: Hud
 var inv_ui: InvUI
@@ -55,7 +57,6 @@ func _ready() -> void:
 	light = LightField.new(world, hero)
 	bag = Inventory.new()
 	foyer = Foyer.new(world)
-	light.foyer = foyer   # les pièces éclairent (générateur implicite de la base)
 	pop = Population.new(world, foyer)
 	caravan = Caravan.new(world, foyer)
 	crew = EnemyCrew.new(world, light, hero)
@@ -65,11 +66,26 @@ func _ready() -> void:
 	view.hero = hero
 	view.light = light
 	view.crew = crew
-	view.foyer = foyer
 	view.pop = pop
 	view.caravan = caravan
-	view.cache_range = CACHE_RANGE
 	add_child(view)
+	# Le vrai éclairage : obscurité + soleil + lampe/halo (+ torches, pièces)
+	lights = LightRig.new(hero)
+	add_child(lights)
+	lights.add_room_light(_room_center(Vector2i.ZERO))   # le hall est éclairé d'office
+	# Calque des marqueurs : coordonnées monde, mais AU-DESSUS de la lumière
+	var marker_layer := CanvasLayer.new()
+	marker_layer.follow_viewport_enabled = true
+	add_child(marker_layer)
+	marker = MarkerView.new()
+	marker.world = world
+	marker.hero = hero
+	marker.foyer = foyer
+	marker.pop = pop
+	marker.caravan = caravan
+	marker.crew = crew
+	marker.cache_range = CACHE_RANGE
+	marker_layer.add_child(marker)
 	camera = Camera2D.new()
 	camera.zoom = Vector2(2.5, 2.5)   # on grossit : ~30 tuiles de large à l'écran
 	camera.position_smoothing_enabled = true
@@ -79,9 +95,10 @@ func _ready() -> void:
 	camera.global_position = hero.pos   # cadrage immédiat (pas de panoramique au démarrage)
 	camera.reset_smoothing()
 	hud = Hud.new()
+	hud.layer = 2   # au-dessus du calque des marqueurs
 	add_child(hud)
-	combat = Combat.new(hero, world, crew, bag, hud, view)
-	view.combat = combat
+	combat = Combat.new(hero, world, crew, bag, hud, marker)
+	marker.combat = combat
 	# Écrans plein écran (masqués par défaut), au-dessus du HUD
 	inv_ui = InvUI.new()
 	inv_ui.bag = bag
@@ -149,8 +166,10 @@ func _process(delta: float) -> void:
 			_refresh_slots()
 	hud.tick(delta)
 	_update_hud()
-	view.cache_active = cache_active
-	view.cache_pos = cache_pos
+	lights.update()
+	marker.cache_active = cache_active
+	marker.cache_pos = cache_pos
+	marker.tick(delta)
 	view.tick(delta)
 	if inv_open:
 		inv_ui.queue_redraw()   # la pile tenue suit le curseur
@@ -256,8 +275,8 @@ func _start_placement(type: int) -> void:
 
 func _stop_placement() -> void:
 	placing = -1
-	view.build_room = -1
-	view.build_slots = []
+	marker.build_room = -1
+	marker.build_slots = []
 
 func _refresh_slots() -> void:
 	var ts := float(WorldGrid.TILE)
@@ -265,8 +284,8 @@ func _refresh_slots() -> void:
 	for mp in foyer.valid_slots():
 		var fp := foyer.footprint(mp)
 		rects.append(Rect2(Vector2(fp.position) * ts, Vector2(fp.size) * ts))
-	view.build_room = placing
-	view.build_slots = rects
+	marker.build_room = placing
+	marker.build_slots = rects
 
 func _place_click(world_pos: Vector2) -> void:
 	for mp in foyer.valid_slots():
@@ -278,6 +297,8 @@ func _place_click(world_pos: Vector2) -> void:
 			hud.flash("Pas assez en stock pour : %s" % Foyer.ROOM_NAMES[placing])
 			return
 		foyer.place(mp, placing)
+		view.mark_dirty()
+		lights.add_room_light(_room_center(mp))
 		hud.flash("%s : construit ! (%s)" % [Foyer.ROOM_NAMES[placing], Foyer.ROOM_NOTES[placing]])
 		if not foyer.can_pay(Foyer.ROOM_COSTS[placing]):
 			_stop_placement()   # plus les moyens d'enchaîner
@@ -299,7 +320,12 @@ func _place_walkway() -> void:
 		return
 	bag.remove(WorldGrid.WOOD, 1)
 	world.set_tile(tx, ty, WorldGrid.PASSERELLE)
-	view.add_flash(Vector2i(tx, ty), 0.12)
+	view.mark_dirty()
+	marker.add_flash(Vector2i(tx, ty), 0.12)
+
+func _room_center(mp: Vector2i) -> Vector2:
+	var ir := foyer.interior(mp)
+	return (Vector2(ir.position) + Vector2(ir.size) * 0.5) * float(WorldGrid.TILE)
 
 # [E] contextuel : caravane > cache > pièce du Foyer (hall = dépôt rapide).
 func _interact() -> void:
@@ -368,6 +394,7 @@ func _place_torch() -> void:
 	if bag.count(WorldGrid.WOOD) > 0 and not world.is_solid(cell.x, cell.y) and not light.torches.has(cell):
 		bag.remove(WorldGrid.WOOD, 1)
 		light.torches.append(cell)
+		lights.add_torch(cell)
 
 func _place_ladder() -> void:
 	# Pose une échelle dans la colonne, des pieds vers le haut, en remplissant le
@@ -389,6 +416,7 @@ func _place_ladder() -> void:
 			break  # bloc plein, OU échelle déjà posée au-dessus → stop (pas de dépassement)
 		ty -= 1
 	if placed > 0:
+		view.mark_dirty()
 		hud.flash("Echelle posee : %d tuiles (-%d bois)" % [placed, placed])
 	else:
 		hud.flash("Echelle : rien a poser (pas de place ou pas de bois)")
@@ -460,14 +488,14 @@ func _handle_dig(delta: float) -> void:
 		_break_tile(tx, ty)
 		_reset_dig()
 		return
-	view.dig_target = dig_target
-	view.dig_frac = dig_progress / need
+	marker.dig_target = dig_target
+	marker.dig_frac = dig_progress / need
 
 func _reset_dig() -> void:
 	dig_target = Vector2i(-1, -1)
 	dig_progress = 0.0
-	view.dig_target = dig_target
-	view.dig_frac = 0.0
+	marker.dig_target = dig_target
+	marker.dig_frac = 0.0
 
 func _dig_need(tx: int, ty: int) -> float:
 	return DIG_TIME * DIG_TIERS[dig_level] * world.dig_mult(world.tile(tx, ty))
@@ -475,7 +503,8 @@ func _dig_need(tx: int, ty: int) -> float:
 func _break_tile(tx: int, ty: int) -> void:
 	var t := world.tile(tx, ty)
 	world.set_tile(tx, ty, WorldGrid.EMPTY)
-	view.add_flash(Vector2i(tx, ty), 0.18)
+	view.mark_dirty()
+	marker.add_flash(Vector2i(tx, ty), 0.18)
 	if t == WorldGrid.WALL:
 		return   # béton : gravats, rien à ramasser
 	var item := WorldGrid.DIRT

@@ -24,7 +24,7 @@ var world: WorldGrid
 var crew: EnemyCrew
 var bag: Inventory
 var hud: Hud
-var view: WorldView
+var view: MarkerView          # feedbacks (flash, traceur lus par le calque marqueurs)
 
 var weapon := 0                  # arme courante : 0 = mêlée, 1 = arme à feu
 var ammo := START_AMMO           # munitions (réserve dédiée, pas dans le sac)
@@ -35,7 +35,7 @@ var tracer_t := 0.0              # reste d'affichage du traceur de tir
 var tracer_a := Vector2.ZERO     # extrémités du traceur (départ → impact)
 var tracer_b := Vector2.ZERO
 
-func _init(h: Hero, w: WorldGrid, c: EnemyCrew, b: Inventory, ui: Hud, v: WorldView) -> void:
+func _init(h: Hero, w: WorldGrid, c: EnemyCrew, b: Inventory, ui: Hud, v: MarkerView) -> void:
 	hero = h
 	world = w
 	crew = c

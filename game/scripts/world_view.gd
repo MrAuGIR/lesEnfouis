@@ -1,47 +1,92 @@
 class_name WorldView
 extends Node2D
-## Rendu grey-box du monde : tuiles éclairées, héros, repères (base, sortie),
-## feedback de creusage. Aucune logique de jeu — il lit l'état et dessine.
+## Rendu du MONDE éclairé (grey-box) : ciel/fond de caverne, tuiles, torches,
+## robots, PNJ, caravane, héros — dessinés en PLEINE couleur : c'est l'éclairage
+## (lights.gd) qui révèle. Les marqueurs/infos par-dessus vivent dans
+## marker_view.gd (non assombris). Gère aussi les OCCULTEURS d'ombres : les
+## blocs pleins arrêtent la lumière (échelles et passerelles la laissent passer).
 
 const VIEW_RX := 34   # demi-largeur de la fenêtre de tuiles dessinées
 const VIEW_RY := 22
-
-const ROOM_TINTS := [
-	Color(0.95, 0.75, 0.35, 0.10),   # dortoir
-	Color(0.45, 0.85, 0.45, 0.10),   # production (rations)
-	Color(0.95, 0.55, 0.30, 0.10),   # atelier
-	Color(0.50, 0.65, 0.95, 0.10),   # entrepôt
-	Color(0.75, 0.85, 0.80, 0.07),   # hall
-]
-const ROOM_LABELS := ["DORTOIR", "PROD. RATIONS", "ATELIER", "ENTREPOT", "HALL"]
+const OCC_MARGIN := 6 # marge d'occulteurs autour de la fenêtre (lumières proches)
 
 var world: WorldGrid
 var hero: Hero
-var light: LightField
+var light: LightField          # registre des torches posées
 var crew: EnemyCrew
-var combat: Combat
-var foyer: Foyer
 var pop: Population
 var caravan: Caravan
 
-var dig_target := Vector2i(-1, -1)
-var dig_frac := 0.0               # progression du creusage (0..1)
-var build_room := -1              # mode placement : type de pièce en cours (-1 = aucun)
-var build_slots := []             # mode placement : slots valides (Array de Rect2, px monde)
-var flashes := []                 # éclats de creusage : {cell:Vector2i, t:float}
-var cache_active := false         # cache de butin à dessiner (mort du héros)
-var cache_pos := Vector2.ZERO
-var cache_range := 2.0 * WorldGrid.TILE
+var _occluders: Array[LightOccluder2D] = []
+var _occ_center := Vector2i(-9999, -9999)
+var _occ_dirty := true
 
-func add_flash(cell: Vector2i, dur: float) -> void:
-	flashes.append({"cell": cell, "t": dur})
-
-func tick(delta: float) -> void:
-	for f in flashes:
-		f.t -= delta
-	flashes = flashes.filter(func(f): return f.t > 0.0)
+func tick(_delta: float) -> void:
 	queue_redraw()
+	var c := Vector2i(int(hero.pos.x / WorldGrid.TILE), int(hero.pos.y / WorldGrid.TILE))
+	if _occ_dirty or c != _occ_center:
+		_occ_center = c
+		_occ_dirty = false
+		_rebuild_occluders()
 
+# À appeler quand le monde change (creusage, construction, échelle, passerelle).
+func mark_dirty() -> void:
+	_occ_dirty = true
+
+# --- Occulteurs : meshing glouton des blocs pleins en rectangles -------------------
+func _occludes(tx: int, ty: int) -> bool:
+	var t := world.tile(tx, ty)
+	return t != WorldGrid.EMPTY and t != WorldGrid.LADDER and t != WorldGrid.PASSERELLE \
+		and ty >= 0 and ty < WorldGrid.GRID_H and tx >= 0 and tx < WorldGrid.GRID_W
+
+func _rebuild_occluders() -> void:
+	var ts := float(WorldGrid.TILE)
+	var x0 := _occ_center.x - VIEW_RX - OCC_MARGIN
+	var x1 := _occ_center.x + VIEW_RX + OCC_MARGIN
+	var y0 := _occ_center.y - VIEW_RY - OCC_MARGIN
+	var y1 := _occ_center.y + VIEW_RY + OCC_MARGIN
+	var w := x1 - x0 + 1
+	var used := {}
+	var n := 0
+	for ty in range(y0, y1 + 1):
+		for tx in range(x0, x1 + 1):
+			var idx := (ty - y0) * w + (tx - x0)
+			if used.has(idx) or not _occludes(tx, ty):
+				continue
+			# Étend la rangée vers la droite, puis le bloc vers le bas (glouton)
+			var rw := 1
+			while tx + rw <= x1 and not used.has(idx + rw) and _occludes(tx + rw, ty):
+				rw += 1
+			var rh := 1
+			while ty + rh <= y1:
+				var full := true
+				for k in rw:
+					if used.has(idx + rh * w + k) or not _occludes(tx + k, ty + rh):
+						full = false
+						break
+				if not full:
+					break
+				rh += 1
+			for ry in rh:
+				for rx in rw:
+					used[idx + ry * w + rx] = true
+			_set_occluder(n, Rect2(tx * ts, ty * ts, rw * ts, rh * ts))
+			n += 1
+	for i in range(n, _occluders.size()):
+		_occluders[i].visible = false
+
+func _set_occluder(i: int, r: Rect2) -> void:
+	while _occluders.size() <= i:
+		var o := LightOccluder2D.new()
+		o.occluder = OccluderPolygon2D.new()
+		add_child(o)
+		_occluders.append(o)
+	var occ := _occluders[i]
+	occ.visible = true
+	(occ.occluder as OccluderPolygon2D).polygon = PackedVector2Array([
+		r.position, Vector2(r.end.x, r.position.y), r.end, Vector2(r.position.x, r.end.y)])
+
+# --- Dessin -------------------------------------------------------------------
 func _draw() -> void:
 	var ts := WorldGrid.TILE
 	var c_dirt := Color(0.42, 0.30, 0.20)
@@ -52,55 +97,43 @@ func _draw() -> void:
 	var c_hard := Color(0.18, 0.20, 0.26)
 	var ptx := int(hero.pos.x / ts)
 	var pty := int(hero.pos.y / ts)
-	# Fond sombre
+	# Fond : caverne (révélé par la lampe) + bandes de ciel au-dessus du relief
 	var bg_pos := Vector2((ptx - VIEW_RX) * ts, (pty - VIEW_RY) * ts)
 	var bg_size := Vector2((VIEW_RX * 2) * ts, (VIEW_RY * 2) * ts)
-	draw_rect(Rect2(bg_pos, bg_size), Color(0.04, 0.04, 0.06))
-	# Tuiles visibles, éclairées
+	draw_rect(Rect2(bg_pos, bg_size), Color(0.16, 0.17, 0.20))
+	for tx in range(ptx - VIEW_RX, ptx + VIEW_RX):
+		var s := world.surface[clampi(tx, 0, WorldGrid.GRID_W - 1)]
+		if s > pty - VIEW_RY:
+			draw_rect(Rect2(tx * ts, (pty - VIEW_RY) * ts, ts, (mini(s, pty + VIEW_RY) - (pty - VIEW_RY)) * ts),
+				Color(0.55, 0.62, 0.72))
+	# Tuiles (pleine couleur — la lumière fait le reste)
 	for ty in range(pty - VIEW_RY, pty + VIEW_RY):
 		for tx in range(ptx - VIEW_RX, ptx + VIEW_RX):
 			var rect := Rect2(tx * ts, ty * ts, ts, ts)
 			var t := world.tile(tx, ty)
 			if t == WorldGrid.EMPTY:
-				# Lueur dans l'air : haze douce qui rend le faisceau visible SANS recouvrir
-				# le décor (courbe glow² → concentrée sur le cœur du faisceau).
-				var glow := maxf(light.lamp_light(tx, ty), light.torch_light(tx, ty))
-				glow = maxf(glow, light.room_light(tx, ty))
-				if glow > 0.02:
-					var g := glow * glow
-					draw_rect(rect, Color(1.0, 0.94, 0.80, g * 0.14))
-				elif ty < world.surface[clampi(tx, 0, WorldGrid.GRID_W - 1)] + 2:
-					var sky := light.sky_light(tx, ty)
-					if sky > 0.02:
-						draw_rect(rect, Color(0.55, 0.65, 0.78, sky * 0.10))
 				continue
 			if t == WorldGrid.LADDER:
-				var bl := light.brightness(tx, ty)
-				var lc := Color(0.78, 0.56, 0.30, 0.45 + 0.55 * bl)
+				var lc := Color(0.78, 0.56, 0.30)
 				draw_rect(Rect2(tx * ts + 3, ty * ts, 2, ts), lc)
 				draw_rect(Rect2(tx * ts + ts - 5, ty * ts, 2, ts), lc)
 				draw_rect(Rect2(tx * ts + 3, ty * ts + 4, ts - 8, 2), lc)
 				draw_rect(Rect2(tx * ts + 3, ty * ts + 10, ts - 8, 2), lc)
 				continue
 			if t == WorldGrid.PASSERELLE:
-				var bp := light.brightness(tx, ty)
 				if world.is_ladder_crossing(tx, ty):
-					# Croisement : l'échelle continue derrière, la passerelle passe
-					# DEVANT (bande de lattes au milieu) — traversable (cf. hero.gd)
-					var lc2 := Color(0.78, 0.56, 0.30, 0.45 + 0.55 * bp)
+					# Croisement : l'échelle continue derrière, la passerelle DEVANT
+					var lc2 := Color(0.78, 0.56, 0.30)
 					draw_rect(Rect2(tx * ts + 3, ty * ts, 2, ts), lc2)
 					draw_rect(Rect2(tx * ts + ts - 5, ty * ts, 2, ts), lc2)
-					draw_rect(Rect2(tx * ts, ty * ts + 5, ts, 6), Color(0.50 * bp, 0.36 * bp, 0.16 * bp))
-					draw_rect(Rect2(tx * ts, ty * ts + 5, ts, 6), Color(0.7 * bp, 0.55 * bp, 0.28 * bp, 0.8), false, 1.0)
+					draw_rect(Rect2(tx * ts, ty * ts + 5, ts, 6), Color(0.50, 0.36, 0.16))
+					draw_rect(Rect2(tx * ts, ty * ts + 5, ts, 6), Color(0.7, 0.55, 0.28, 0.8), false, 1.0)
 					continue
-				# Plancher de bois construit : plein pour la collision, dessiné en lattes
-				draw_rect(rect, Color(0.50 * bp, 0.36 * bp, 0.16 * bp))
-				var sc := Color(0.24 * bp, 0.16 * bp, 0.06 * bp)
-				draw_rect(Rect2(tx * ts, ty * ts + 4, ts, 1), sc)
-				draw_rect(Rect2(tx * ts, ty * ts + 10, ts, 1), sc)
-				draw_rect(rect, Color(0.7 * bp, 0.55 * bp, 0.28 * bp, 0.8), false, 1.0)
+				draw_rect(rect, Color(0.50, 0.36, 0.16))
+				draw_rect(Rect2(tx * ts, ty * ts + 4, ts, 1), Color(0.24, 0.16, 0.06))
+				draw_rect(Rect2(tx * ts, ty * ts + 10, ts, 1), Color(0.24, 0.16, 0.06))
+				draw_rect(rect, Color(0.7, 0.55, 0.28, 0.8), false, 1.0)
 				continue
-			var b := light.brightness(tx, ty)
 			var col := c_dirt
 			if t == WorldGrid.ROCK:
 				col = c_rock
@@ -112,106 +145,28 @@ func _draw() -> void:
 				col = c_wall
 			elif t == WorldGrid.HARDROCK:
 				col = c_hard
-			draw_rect(rect, Color(col.r * b, col.g * b, col.b * b))
-			draw_rect(rect, Color(0, 0, 0, 0.15 * b), false, 1.0)
-	# Voile de gaz toxique (gris-jaune) sur la zone de surface, au-dessus de GAS_FLOOR_ROW
-	var gas_top := float((pty - VIEW_RY) * ts)
-	var gas_bot := minf(float(WorldGrid.GAS_FLOOR_ROW * ts), float((pty + VIEW_RY) * ts))
-	if gas_bot > gas_top:
-		var gx := float((ptx - VIEW_RX) * ts)
-		var gw := float((VIEW_RX * 2) * ts)
-		draw_rect(Rect2(Vector2(gx, gas_top), Vector2(gw, gas_bot - gas_top)), Color(0.65, 0.62, 0.20, 0.16))
-	# Éclats de creusage (feedback de cassage)
-	for f in flashes:
-		var a: float = clampf(f.t / 0.18, 0.0, 1.0)
-		draw_rect(Rect2(f.cell.x * ts, f.cell.y * ts, ts, ts), Color(1.0, 0.9, 0.6, a * 0.7))
-	# Cible de creusage + progression
-	if dig_target.x >= 0:
-		var rpos := Vector2(dig_target.x * ts, dig_target.y * ts)
-		draw_rect(Rect2(rpos, Vector2(ts, ts)), Color(1, 1, 1, 0.15 + 0.35 * clampf(dig_frac, 0.0, 1.0)))
-		draw_rect(Rect2(rpos, Vector2(ts, ts)), Color(1, 1, 1, 0.7), false, 1.0)
-	# Torches posées
+			draw_rect(rect, col)
+			draw_rect(rect, Color(0, 0, 0, 0.15), false, 1.0)
+	# Torches posées (le bâton ; la lumière vient de lights.gd)
 	for c in light.torches:
 		var tc := Vector2(c.x * ts + ts * 0.5, c.y * ts + ts * 0.5)
-		draw_circle(tc, LightField.TORCH_CORE * ts, Color(1.0, 0.7, 0.3, 0.12))
 		draw_rect(Rect2(tc + Vector2(-2, -5), Vector2(4, 10)), Color(1.0, 0.75, 0.35))
-	# Robots (visibles surtout sous la lumière — sinon silhouette à peine perceptible)
+	# Robots (dans le noir : presque invisibles — leurs yeux luisent, cf. marker_view)
 	for e in crew.list:
 		var ep: Vector2 = e["pos"]
 		var eh := EnemyCrew.ENEMY_HALF
-		var vis: float = maxf(0.28, light.brightness(int(ep.x / ts), int(ep.y / ts)))
 		var ecol := Color(1.0, 0.95, 0.95) if float(e["flash"]) > 0.0 else Color(0.85, 0.30, 0.25)
-		draw_rect(Rect2(ep - eh, eh * 2.0), Color(ecol.r * vis, ecol.g * vis, ecol.b * vis))
-		draw_rect(Rect2(ep - eh, eh * 2.0), Color(0, 0, 0, 0.5 * vis), false, 1.0)
-		# "oeil" tourné vers le sens de marche
-		draw_rect(Rect2(ep + Vector2(float(e["dir"]) * 2.0 - 1.5, -3.0), Vector2(3, 3)), Color(1.0, 0.85, 0.4, vis))
-		if float(e["hp"]) < EnemyCrew.ENEMY_HP:
-			var w := eh.x * 2.0
-			var frac: float = clampf(float(e["hp"]) / EnemyCrew.ENEMY_HP, 0.0, 1.0)
-			draw_rect(Rect2(ep + Vector2(-eh.x, -eh.y - 5.0), Vector2(w, 2)), Color(0.25, 0.0, 0.0))
-			draw_rect(Rect2(ep + Vector2(-eh.x, -eh.y - 5.0), Vector2(w * frac, 2)), Color(0.95, 0.25, 0.25))
-	# Repères : base (départ, en profondeur) et sortie (objectif, en surface)
-	var font := ThemeDB.fallback_font
-	var ex := world.exit_col()
-	var exit_p := Vector2(ex * ts + ts * 0.5, world.surface[ex] * ts)
-	draw_rect(Rect2(exit_p + Vector2(-WorldGrid.EXIT_HALF * ts, -3), Vector2(WorldGrid.EXIT_HALF * 2 * ts, 3)), Color(0.95, 0.85, 0.3, 0.85))
-	draw_string(font, exit_p + Vector2(-14, -6), "SORTIE", HORIZONTAL_ALIGNMENT_LEFT, -1, 8, Color(1.0, 0.95, 0.55))
-	# Le Foyer : étiquette + pièces construites (teinte + nom + postes occupés)
-	var ho := world.hall_origin()
-	draw_string(font, Vector2((ho.x + 3) * ts, ho.y * ts - 5), "LE FOYER",
-		HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color(0.6, 1.0, 0.7))
-	for mp in foyer.rooms:
-		var ir := foyer.interior(mp)
-		var rr := Rect2(Vector2(ir.position) * float(ts), Vector2(ir.size) * float(ts))
-		var room := int(foyer.rooms[mp]["type"])
-		draw_rect(rr, ROOM_TINTS[room])
-		draw_rect(rr, Color(ROOM_TINTS[room].r, ROOM_TINTS[room].g, ROOM_TINTS[room].b, 0.55), false, 1.0)
-		var lbl: String = ROOM_LABELS[room]
-		if int(Foyer.ROOM_SLOTS[room]) > 0:
-			lbl += "  %d/%d" % [pop.assigned_to(Vector2i(mp)).size(), int(Foyer.ROOM_SLOTS[room])]
-		draw_string(font, rr.position + Vector2(4, 10), lbl, HORIZONTAL_ALIGNMENT_LEFT, -1, 7,
-			Color(ROOM_TINTS[room].r, ROOM_TINTS[room].g, ROOM_TINTS[room].b, 0.95))
-	# Mode placement : slots fantômes (celui sous la souris en surbrillance)
-	if build_room >= 0:
-		var mouse := get_global_mouse_position()
-		for s in build_slots:
-			var sr: Rect2 = s
-			var hover := sr.has_point(mouse)
-			draw_rect(sr, Color(0.4, 0.95, 0.5, 0.16 if hover else 0.06))
-			draw_rect(sr, Color(0.4, 0.95, 0.5, 0.9 if hover else 0.35), false, 1.0)
-			if hover:
-				draw_string(font, sr.position + Vector2(4, 12), ROOM_LABELS[build_room] + " ICI",
-					HORIZONTAL_ALIGNMENT_LEFT, -1, 8, Color(0.75, 1.0, 0.8))
-	# PNJ du Foyer (toujours un peu visibles : c'est la maison, elle vit)
+		draw_rect(Rect2(ep - eh, eh * 2.0), ecol)
+		draw_rect(Rect2(ep - eh, eh * 2.0), Color(0, 0, 0, 0.5), false, 1.0)
+	# PNJ du Foyer
 	for npc in pop.npcs:
 		var np: Vector2 = npc["pos"]
-		var nvis: float = maxf(0.55, light.brightness(int(np.x / ts), int(np.y / ts)))
-		draw_rect(Rect2(np - Population.NPC_HALF, Population.NPC_HALF * 2.0),
-			Color(0.62 * nvis, 0.78 * nvis, 0.92 * nvis))
+		draw_rect(Rect2(np - Population.NPC_HALF, Population.NPC_HALF * 2.0), Color(0.62, 0.78, 0.92))
 		draw_rect(Rect2(np - Population.NPC_HALF, Population.NPC_HALF * 2.0), Color(0, 0, 0, 0.5), false, 1.0)
-		var nm := String(npc["name"]).split(" ")[0]
-		var nw := font.get_string_size(nm, HORIZONTAL_ALIGNMENT_LEFT, -1, 6).x
-		draw_string(font, np + Vector2(-nw * 0.5, -Population.NPC_HALF.y - 3.0), nm, HORIZONTAL_ALIGNMENT_LEFT, -1, 6, Color(0.8, 0.88, 0.95, 0.9))
-	# La caravane (quand elle est là) : marchand + zone de troc
+	# La caravane (le marchand)
 	if caravan.present:
-		draw_circle(caravan.pos, Caravan.TRADE_RANGE, Color(0.9, 0.7, 0.3, 0.07))
 		draw_rect(Rect2(caravan.pos - Vector2(7, 11), Vector2(14, 22)), Color(0.85, 0.65, 0.30))
 		draw_rect(Rect2(caravan.pos - Vector2(7, 11), Vector2(14, 22)), Color(0.3, 0.2, 0.08, 0.8), false, 1.0)
-		draw_string(font, caravan.pos + Vector2(-26, -16), "CARAVANE [E]", HORIZONTAL_ALIGNMENT_LEFT, -1, 7, Color(1.0, 0.85, 0.5))
-	# Cache de butin (déposée à la mort, à récupérer)
-	if cache_active:
-		draw_circle(cache_pos, cache_range, Color(0.95, 0.75, 0.25, 0.16))
-		draw_rect(Rect2(cache_pos + Vector2(-4, -4), Vector2(8, 8)), Color(0.95, 0.8, 0.3))
-	# Halo central + héros (le héros porte la lumière ; le halo faiblit avec le carburant)
-	draw_circle(hero.pos, LightField.LAMP_AMBIENT_CORE * ts, Color(1.0, 0.93, 0.78, 0.07 * hero.lamp_factor))
+	# Le héros (porteur de la lumière)
 	draw_rect(Rect2(hero.pos - hero.half, hero.half * 2.0), Color(0.95, 0.85, 0.5))
 	draw_rect(Rect2(hero.pos - hero.half, hero.half * 2.0), Color(0.2, 0.15, 0.05, 0.8), false, 1.0)
-	# Arc de coup (feedback du clic droit, mêlée)
-	if combat.atk_t > 0.0:
-		var aa: float = clampf(combat.atk_t / Combat.MELEE_VIS, 0.0, 1.0)
-		draw_circle(hero.pos + hero.aim * Combat.MELEE_RANGE * 0.55, Combat.MELEE_RANGE * 0.5, Color(1.0, 1.0, 1.0, 0.20 * aa))
-	# Traceur de tir (arme à feu)
-	if combat.tracer_t > 0.0:
-		var ta: float = clampf(combat.tracer_t / Combat.GUN_TRACER_T, 0.0, 1.0)
-		draw_line(combat.tracer_a, combat.tracer_b, Color(1.0, 0.9, 0.4, 0.5 + 0.4 * ta), 1.5)
-		draw_circle(combat.tracer_b, 2.5, Color(1.0, 0.85, 0.4, ta))
