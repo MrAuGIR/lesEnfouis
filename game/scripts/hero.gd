@@ -34,6 +34,7 @@ var lamp_factor := 1.0            # 0..1 : intensité de la lampe selon le carbu
 var antipol_fuel := 0.0           # secondes de protection anti-gaz restantes
 var antipol_on := false           # éclairage anti-pollution activé ?
 var was_in_gas := false           # pour signaler l'entrée dans la zone de gaz
+var drop_through := false         # [S] enfoncé : traverse les croisements échelle/passerelle
 
 func _init(w: WorldGrid) -> void:
 	world = w
@@ -98,6 +99,7 @@ func move(delta: float, controls: bool) -> void:
 	if controls and (Input.is_physical_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT)):
 		dir += 1.0
 	vel.x = dir * MOVE_SPEED
+	drop_through = controls and (Input.is_physical_key_pressed(KEY_S) or Input.is_key_pressed(KEY_DOWN))
 
 	if on_ladder():
 		var climb := 0.0
@@ -148,6 +150,15 @@ func _resolve_axis(is_x: bool) -> bool:
 		for tx in range(min_tx, max_tx + 1):
 			if not world.is_solid(tx, ty):
 				continue
+			if world.is_ladder_crossing(tx, ty):
+				# Passerelle en travers d'une échelle : on passe latéralement et en
+				# grimpant ; [S] descend au travers. On n'atterrit dessus que si on
+				# arrive d'au-dessus (pénétration faible), sinon on est en train de
+				# la traverser et l'éjection nous coincerait.
+				if is_x or vel.y < 0.0 or drop_through:
+					continue
+				if (pos.y + half.y) - ty * ts > 12.0:
+					continue
 			# Bornes du héros (recalculées car pos peut bouger)
 			var l := pos.x - half.x
 			var r := pos.x + half.x

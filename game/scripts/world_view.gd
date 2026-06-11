@@ -65,6 +65,7 @@ func _draw() -> void:
 				# Lueur dans l'air : haze douce qui rend le faisceau visible SANS recouvrir
 				# le décor (courbe glow² → concentrée sur le cœur du faisceau).
 				var glow := maxf(light.lamp_light(tx, ty), light.torch_light(tx, ty))
+				glow = maxf(glow, light.room_light(tx, ty))
 				if glow > 0.02:
 					var g := glow * glow
 					draw_rect(rect, Color(1.0, 0.94, 0.80, g * 0.14))
@@ -82,8 +83,17 @@ func _draw() -> void:
 				draw_rect(Rect2(tx * ts + 3, ty * ts + 10, ts - 8, 2), lc)
 				continue
 			if t == WorldGrid.PASSERELLE:
-				# Plancher de bois construit : plein pour la collision, dessiné en lattes
 				var bp := light.brightness(tx, ty)
+				if world.is_ladder_crossing(tx, ty):
+					# Croisement : l'échelle continue derrière, la passerelle passe
+					# DEVANT (bande de lattes au milieu) — traversable (cf. hero.gd)
+					var lc2 := Color(0.78, 0.56, 0.30, 0.45 + 0.55 * bp)
+					draw_rect(Rect2(tx * ts + 3, ty * ts, 2, ts), lc2)
+					draw_rect(Rect2(tx * ts + ts - 5, ty * ts, 2, ts), lc2)
+					draw_rect(Rect2(tx * ts, ty * ts + 5, ts, 6), Color(0.50 * bp, 0.36 * bp, 0.16 * bp))
+					draw_rect(Rect2(tx * ts, ty * ts + 5, ts, 6), Color(0.7 * bp, 0.55 * bp, 0.28 * bp, 0.8), false, 1.0)
+					continue
+				# Plancher de bois construit : plein pour la collision, dessiné en lattes
 				draw_rect(rect, Color(0.50 * bp, 0.36 * bp, 0.16 * bp))
 				var sc := Color(0.24 * bp, 0.16 * bp, 0.06 * bp)
 				draw_rect(Rect2(tx * ts, ty * ts + 4, ts, 1), sc)

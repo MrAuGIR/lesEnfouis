@@ -18,8 +18,14 @@ const AMBIENT_MIN := 0.05        # luminosité minimale (le noir n'est jamais to
 const TORCH_RADIUS := 5.5        # tuiles : portée d'une torche posée
 const TORCH_CORE := 1.5          # tuiles : pleine lumière au pied de la torche
 
+# Les pièces du Foyer sont éclairées d'office (le générateur fait partie de la
+# base — pas de mécanique d'énergie), et diffusent un peu autour d'elles.
+const ROOM_LIGHT := 0.85         # luminosité à l'intérieur des pièces
+const ROOM_FADE := 4.0           # tuiles de diffusion autour des pièces
+
 var world: WorldGrid
 var hero: Hero
+var foyer: Foyer                  # branché par main.gd (peut rester null en théorie)
 var torches: Array[Vector2i] = [] # torches posées (sécurisent un chemin)
 
 func _init(w: WorldGrid, h: Hero) -> void:
@@ -69,6 +75,22 @@ func torch_light(tx: int, ty: int) -> float:
 		best = l
 	return best
 
+# Lumière des pièces du Foyer : pleine à l'intérieur, déclin (Chebyshev) autour.
+# Volontairement SANS occlusion : c'est une lueur diffuse qui « déborde » des murs.
+func room_light(tx: int, ty: int) -> float:
+	if foyer == null:
+		return 0.0
+	var best := 0.0
+	for mp in foyer.rooms:
+		var r: Rect2i = foyer.interior(mp)
+		var dx := maxi(maxi(r.position.x - tx, tx - (r.end.x - 1)), 0)
+		var dy := maxi(maxi(r.position.y - ty, ty - (r.end.y - 1)), 0)
+		var d := float(maxi(dx, dy))
+		if d <= 0.0:
+			return ROOM_LIGHT
+		best = maxf(best, ROOM_LIGHT * (1.0 - d / ROOM_FADE))
+	return clampf(best, 0.0, 1.0)
+
 func los_clear_from(a: Vector2, tx: int, ty: int) -> bool:
 	# Vrai si rien de plein ne bloque entre la source (en tuiles) et la tuile (cible
 	# exclue : le mur qu'on regarde est éclairé sur sa face, pas ce qu'il y a derrière).
@@ -89,4 +111,5 @@ func los_clear_from(a: Vector2, tx: int, ty: int) -> bool:
 func brightness(tx: int, ty: int) -> float:
 	var light := maxf(sky_light(tx, ty) * SKY_STRENGTH, lamp_light(tx, ty))
 	light = maxf(light, torch_light(tx, ty))
+	light = maxf(light, room_light(tx, ty))
 	return clampf(light, AMBIENT_MIN, 1.0)

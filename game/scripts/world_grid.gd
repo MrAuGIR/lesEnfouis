@@ -166,6 +166,13 @@ func is_solid(tx: int, ty: int) -> bool:
 	var t := grid[ty * GRID_W + tx]
 	return t != EMPTY and t != LADDER   # l'échelle se traverse
 
+# Passerelle posée en travers d'une colonne d'échelle : dessinée DEVANT l'échelle,
+# on grimpe au travers et [S] descend au travers (cf. hero.gd). Les robots, eux,
+# la voient pleine (is_solid) et marchent dessus.
+func is_ladder_crossing(tx: int, ty: int) -> bool:
+	return tile(tx, ty) == PASSERELLE \
+		and (tile(tx, ty - 1) == LADDER or tile(tx, ty + 1) == LADDER)
+
 func is_diggable(tx: int, ty: int) -> bool:
 	var t := tile(tx, ty)
 	return t == DIRT or t == ROCK or t == WOOD or t == LITHIUM or t == WALL \

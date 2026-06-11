@@ -55,6 +55,7 @@ func _ready() -> void:
 	light = LightField.new(world, hero)
 	bag = Inventory.new()
 	foyer = Foyer.new(world)
+	light.foyer = foyer   # les pièces éclairent (générateur implicite de la base)
 	pop = Population.new(world, foyer)
 	caravan = Caravan.new(world, foyer)
 	crew = EnemyCrew.new(world, light, hero)
