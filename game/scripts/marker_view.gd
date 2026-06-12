@@ -26,6 +26,7 @@ var caravan: Caravan
 var crew: EnemyCrew
 var combat: Combat
 var raids: Raids
+var boss: BossFight
 
 var dig_target := Vector2i(-1, -1)
 var dig_frac := 0.0               # progression du creusage (0..1)
@@ -121,6 +122,11 @@ func _draw() -> void:
 		var kind := int(e["kind"])
 		if kind == EnemyCrew.KIND_ROBOT:
 			draw_rect(Rect2(ep + Vector2(float(e["dir"]) * 2.0 - 1.5, -3.0), Vector2(3, 3)), Color(1.0, 0.25, 0.15, 0.95))
+		elif kind == EnemyCrew.KIND_BOSS:    # la COURONNE du Roi + son regard
+			for i in 3:
+				draw_rect(Rect2(ep + Vector2(-7.0 + float(i) * 5.0, -eh.y - 5.0), Vector2(3, 4)), Color(0.95, 0.78, 0.25))
+			draw_rect(Rect2(ep + Vector2(-8.0, -eh.y - 2.0), Vector2(16, 2)), Color(0.95, 0.78, 0.25))
+			draw_rect(Rect2(ep + Vector2(float(e["dir"]) * 4.0 - 2.0, -eh.y + 4.0), Vector2(4, 2)), Color(1.0, 0.2, 0.1, 0.95))
 		elif kind == EnemyCrew.KIND_LOURD:   # visière rouge du Lourd
 			draw_rect(Rect2(ep + Vector2(float(e["dir"]) * 3.0 - 2.5, -eh.y + 2.0), Vector2(5, 2)), Color(1.0, 0.2, 0.1, 0.95))
 		else:   # frontale des pilleurs (ils explorent aussi dans le noir)
@@ -153,6 +159,9 @@ func _draw() -> void:
 			var dp: Vector2 = dr["pos"]
 			draw_rect(Rect2(dp + Vector2(-4, -4), Vector2(8, 8)), Color(0.85, 0.68, 0.22))
 			draw_string(font, dp + Vector2(-12, -8), "BUTIN", HORIZONTAL_ALIGNMENT_LEFT, -1, 7, Color(1.0, 0.85, 0.4))
+	# Le Roi des Galeries (M5) : portes, jauge d'arène, télégraphes, charge de perçage
+	if boss != null:
+		_draw_boss(font, float(ts))
 	# Noms des PNJ (un blessé est signalé en rouge)
 	for npc in pop.npcs:
 		var np: Vector2 = npc["pos"]
@@ -184,3 +193,73 @@ func _draw() -> void:
 		var ta: float = clampf(combat.tracer_t / Combat.GUN_TRACER_T, 0.0, 1.0)
 		draw_line(combat.tracer_a, combat.tracer_b, Color(1.0, 0.9, 0.4, 0.5 + 0.4 * ta), 1.5)
 		draw_circle(combat.tracer_b, 2.5, Color(1.0, 0.85, 0.4, ta))
+
+func _draw_boss(font: Font, ts: float) -> void:
+	var gold := Color(1.0, 0.85, 0.4)
+	# Invite sur les portes scellées/ouvertes
+	if boss.state == BossFight.ST_SEALED or boss.state == BossFight.ST_OPEN:
+		var dc := boss.door_center()
+		if hero.pos.distance_to(dc) <= 8.0 * ts:
+			var lbl := "[E] TERMINAL DU ROI DES GALERIES" if boss.state == BossFight.ST_SEALED \
+				else "ENTRE ! (les portes ne resteront pas ouvertes...)"
+			var lw := font.get_string_size(lbl, HORIZONTAL_ALIGNMENT_LEFT, -1, 8).x
+			draw_string(font, dc + Vector2(-lw * 0.5, -3.0 * ts), lbl,
+				HORIZONTAL_ALIGNMENT_LEFT, -1, 8, Color(1.0, 0.55, 0.45))
+			if boss.state == BossFight.ST_SEALED:
+				draw_string(font, dc + Vector2(-lw * 0.5, -3.0 * ts + 9.0),
+					"il ne laissera personne ressortir", HORIZONTAL_ALIGNMENT_LEFT, -1, 7,
+					Color(1.0, 0.55, 0.45, 0.8))
+	var a: Rect2i = world.boss_arena
+	# Combat : grande jauge du Roi au-dessus de l'arène + point d'exclamation télégraphié
+	if boss.state == BossFight.ST_FIGHT and boss.boss != null:
+		var frac: float = clampf(float(boss.boss["hp"]) / float(boss.boss["max_hp"]), 0.0, 1.0)
+		var bx := float(a.position.x) * ts
+		var by := float(a.position.y) * ts - 10.0
+		var bw := float(a.size.x) * ts
+		draw_rect(Rect2(bx, by, bw, 5.0), Color(0.2, 0.02, 0.02, 0.9))
+		draw_rect(Rect2(bx, by, bw * frac, 5.0), Color(0.85, 0.15, 0.20))
+		draw_rect(Rect2(bx, by, bw, 5.0), Color(0, 0, 0, 0.8), false, 1.0)
+		draw_string(font, Vector2(bx, by - 3.0), "LE ROI DES GALERIES" + ("  — ENRAGE" if boss.enraged else ""),
+			HORIZONTAL_ALIGNMENT_LEFT, -1, 8, Color(1.0, 0.35, 0.35))
+		if boss.phase == BossFight.P_TELEGRAPH:
+			var bp: Vector2 = boss.boss["pos"]
+			draw_string(font, bp + Vector2(-3.0, -float(Vector2(boss.boss["half"]).y) - 10.0), "!",
+				HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(1.0, 0.25, 0.15))
+	# Onde de la frappe au sol
+	if boss.slam_t > 0.0:
+		var sf: float = 1.0 - boss.slam_t / 0.35
+		draw_arc(boss.slam_pos, BossFight.SLAM_RANGE * ts * maxf(sf, 0.15), PI, TAU, 24,
+			Color(1.0, 0.7, 0.3, 0.7 * (1.0 - sf)), 2.0)
+	# Gravats : ombre télégraphiée au sol, puis la pierre qui tombe
+	for d in boss.debris:
+		var p: Vector2 = d["pos"]
+		if float(d["warn"]) > 0.0:
+			var c := Vector2i(int(p.x / ts), int(p.y / ts))
+			var fy := c.y
+			while not world.is_solid(c.x, fy + 1) and fy < c.y + 12:
+				fy += 1
+			var pulse := 0.35 + 0.45 * (1.0 - float(d["warn"]) / BossFight.DEBRIS_WARN)
+			draw_rect(Rect2(c.x * ts + 2.0, (fy + 1) * ts - 4.0, ts - 4.0, 3.0),
+				Color(1.0, 0.4, 0.2, pulse))
+		else:
+			draw_rect(Rect2(p - BossFight.DEBRIS_HALF, BossFight.DEBRIS_HALF * 2.0), Color(0.45, 0.42, 0.40))
+			draw_rect(Rect2(p - BossFight.DEBRIS_HALF, BossFight.DEBRIS_HALF * 2.0), Color(0.1, 0.1, 0.1, 0.8), false, 1.0)
+	# Jets de vapeur (enrage) : sifflement puis colonne brûlante
+	if boss.state == BossFight.ST_FIGHT and boss.enraged:
+		for v in boss.vents:
+			var c2: Vector2i = v["cell"]
+			var ph: int = boss.vent_phase(v)
+			if ph == 1:
+				draw_rect(Rect2(c2.x * ts + 5.0, (c2.y + 1) * ts - 4.0, ts - 10.0, 4.0),
+					Color(1.0, 0.6, 0.2, 0.8))
+			elif ph == 2:
+				var r := Rect2(c2.x * ts, float(c2.y - BossFight.VENT_H + 1) * ts, ts, float(BossFight.VENT_H) * ts)
+				draw_rect(r, Color(0.95, 0.95, 1.0, 0.45))
+				draw_rect(r, Color(1.0, 1.0, 1.0, 0.7), false, 1.0)
+	# La charge de perçage (la clé de la surface), à ramasser au contact
+	if boss.state == BossFight.ST_DEAD and not boss.charge_taken:
+		draw_circle(boss.charge_pos, 1.5 * ts, Color(1.0, 0.8, 0.3, 0.10))
+		draw_rect(Rect2(boss.charge_pos + Vector2(-4, -4), Vector2(8, 8)), gold)
+		draw_rect(Rect2(boss.charge_pos + Vector2(-4, -4), Vector2(8, 8)), Color(0.4, 0.25, 0.05), false, 1.0)
+		draw_string(font, boss.charge_pos + Vector2(-38.0, -10.0), "CHARGE DE PERCAGE",
+			HORIZONTAL_ALIGNMENT_LEFT, -1, 7, gold)

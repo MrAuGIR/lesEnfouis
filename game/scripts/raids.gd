@@ -51,6 +51,9 @@ var wave := 0
 var stolen_total := 0        # ressources réellement parties pendant le raid en cours
 var drops := []              # butin tombé : {"pos": Vector2, "carry": Dictionary}
 var no_path_warned := false
+var hold := false            # combat de boss en cours : le compte à rebours est gelé (M5)
+var subdued := false         # le Roi des Galeries est mort : raids réduits de moitié, 2x plus rares
+var repelled := 0            # raids repoussés sans perte (stats de l'écran de fin)
 
 func _init(w: WorldGrid, f: Foyer, p: Population, c: EnemyCrew, h: Hero,
 		l: LightField, b: Inventory) -> void:
@@ -67,11 +70,13 @@ func update(delta: float) -> Array:
 	var msgs := []
 	match state:
 		ST_IDLE:
-			timer -= delta
+			if not hold:
+				timer -= delta
 			if timer <= 0.0:
 				_try_alert(msgs)
 		ST_ALERT:
-			timer -= delta
+			if not hold:
+				timer -= delta
 			if timer <= 0.0:
 				_launch(msgs)
 		ST_ACTIVE:
@@ -79,10 +84,11 @@ func update(delta: float) -> Array:
 			_run_defense(delta)
 			if _raider_count() == 0:
 				state = ST_IDLE
-				timer = RAID_PERIOD
+				timer = _period()
 				if stolen_total > 0:
 					msgs.append("Le raid est fini : les pilleurs ont emporte %d ressource(s)..." % stolen_total)
 				else:
+					repelled += 1
 					msgs.append("*** RAID REPOUSSE ! Le Foyer est sauf. ***")
 	_pickup_drops(msgs)
 	return msgs
@@ -94,6 +100,9 @@ func status_text() -> String:
 		ST_ACTIVE:
 			return "!! RAID EN COURS : %d assaillant(s) !!" % _raider_count()
 	return "prochain raid : %d s" % maxi(0, ceili(timer))
+
+func _period() -> float:
+	return RAID_PERIOD * (2.0 if subdued else 1.0)
 
 func _raider_count() -> int:
 	var n := 0
@@ -120,12 +129,14 @@ func _launch(msgs: Array) -> void:
 	var spawns := _spawns_with_path()
 	if spawns.is_empty():   # passage rebouché pendant l'alerte (passerelle...)
 		state = ST_IDLE
-		timer = RAID_PERIOD
+		timer = _period()
 		msgs.append("Les pilleurs n'ont pas trouve de passage : raid annule.")
 		return
 	wave += 1
 	stolen_total = 0
 	var count := mini(WAVE_BASE + (wave - 1), WAVE_MAX)
+	if subdued:
+		count = maxi(1, count / 2)   # faction décapitée (le Roi est mort)
 	for i in count:
 		var sp: Dictionary = spawns[i % spawns.size()]
 		var kind := EnemyCrew.KIND_LOURD if wave >= LOURD_FROM_WAVE and i == 0 \

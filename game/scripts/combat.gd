@@ -118,7 +118,9 @@ func _cull() -> void:
 	var ts := WorldGrid.TILE
 	var alive := []
 	for e in crew.list:
-		if float(e["hp"]) > 0.0:
+		# Le Roi des Galeries ne se « loote » pas ici : sa mort est mise en scène
+		# par boss.gd (charge de perçage, portes, sbires).
+		if float(e["hp"]) > 0.0 or e.get("boss", false):
 			alive.append(e)
 			continue
 		view.add_flash(Vector2i(int(e["pos"].x / ts), int(e["pos"].y / ts)), 0.3)

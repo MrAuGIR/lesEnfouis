@@ -13,11 +13,12 @@ const KIND_ROBOT := 0
 const KIND_FONCEUR := 1
 const KIND_TIREUR := 2
 const KIND_LOURD := 3
-const KIND_NAMES := ["Robot", "Pilleur", "Tireur", "Lourd"]
-const K_HP := [60.0, 50.0, 40.0, 220.0]
-const K_SPEED := [42.0, 48.0, 40.0, 20.0]
-const K_DMG := [12.0, 10.0, 8.0, 24.0]   # contact (Tireur : dégâts de ses balles)
-const K_HALF := [Vector2(6, 7), Vector2(5, 10), Vector2(5, 10), Vector2(8, 12)]
+const KIND_BOSS := 4             # le Roi des Galeries (piloté par boss.gd, M5)
+const KIND_NAMES := ["Robot", "Pilleur", "Tireur", "Lourd", "le Roi des Galeries"]
+const K_HP := [60.0, 50.0, 40.0, 220.0, 550.0]
+const K_SPEED := [42.0, 48.0, 40.0, 20.0, 34.0]
+const K_DMG := [12.0, 10.0, 8.0, 24.0, 18.0]   # contact (Tireur : dégâts de ses balles)
+const K_HALF := [Vector2(6, 7), Vector2(5, 10), Vector2(5, 10), Vector2(8, 12), Vector2(10, 13)]
 
 const ENEMY_COUNT := 8           # robots dispersés au-dessus de la barrière
 const PATROL_COUNT := 3          # pilleurs en maraude par tunnel de métro
@@ -137,8 +138,8 @@ func update(delta: float) -> void:
 		s.t -= delta
 	shots = shots.filter(func(s): return s.t > 0.0)
 	for e in list:
-		if e.get("raid", false):
-			continue   # les assaillants de raid sont pilotés par raids.gd
+		if e.get("raid", false) or e.get("boss", false):
+			continue   # assaillants de raid → raids.gd ; le Roi → boss.gd
 		e["hit_cd"] = maxf(0.0, float(e["hit_cd"]) - delta)
 		e["flash"] = maxf(0.0, float(e["flash"]) - delta)
 		e["shoot_cd"] = maxf(0.0, float(e["shoot_cd"]) - delta)

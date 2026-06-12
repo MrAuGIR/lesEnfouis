@@ -15,12 +15,13 @@ const ROCK := 2
 const WOOD := 3    # étais de bois (structures humaines) → torches + construction/craft
 const LITHIUM := 4 # minerai de lithium (dans la roche) → recharge la lampe frontale
 const WALL := 5    # béton d'un bunker abandonné (creusable, sans ressource : gravats)
-const HARDROCK := 6 # roche dense (barrière) : nécessite l'outil Fer (niveau >= 1)
+const HARDROCK := 6 # roche dense (barrière) : INDESTRUCTIBLE — seule la charge de perçage du Roi l'ouvre (M5)
 const LADDER := 7   # échelle (construite en bois) : on grimpe dessus
 const PASSERELLE := 9  # plancher de bois construit (1 bois = 1 bloc) — l'id 8 est réservé aux rations
 const IRON := 10    # minerai de fer (roche du Transit) → outil Fer, équipement
 const CRATE := 11   # conteneur à fouiller ([E] : loot aléatoire, une seule fois)
 const CRATE_OPEN := 12 # conteneur déjà fouillé (vide, reste en décor)
+const BOSS_DOOR := 13  # portes scellées de l'arène du Roi (s'ouvrent au [E], cf. boss.gd)
 
 # Bunkers abandonnés (seule source de bois : structures humaines, pas le sol)
 const STRUCT_COUNT := 60
@@ -49,6 +50,7 @@ const METRO_H := 4                        # hauteur intérieure d'un tunnel (tui
 const STATION_W := 16                     # intérieur d'une station
 const STATION_H := 7
 const IRON_CHANCE := 0.16                 # part de la roche du Transit en filons de fer
+const ARENA_W := 28                       # intérieur du terminal du Roi (M5, boss.gd)
 
 # Le Foyer (M2) : pièces construites librement sur une grille de MODULES au
 # gabarit unique (intérieur 8x5, murs mitoyens partagés). Seul le hall de départ
@@ -63,6 +65,9 @@ var surface := PackedInt32Array() # hauteur du terrain par colonne (lumière du 
 var metro_rects: Array[Rect2i] = []  # intérieurs des tunnels de métro (Transit)
 var stations: Array[Rect2i] = []     # intérieurs des stations de métro
 var captive_spots := []              # PNJ légendaires : {"cell": Vector2i, "guarded": bool}
+var boss_arena := Rect2i()           # intérieur du terminal du Roi des Galeries (M5)
+var boss_door_cells: Array[Vector2i] = []  # les tuiles BOSS_DOOR de l'entrée
+var boss_spawn := Vector2i()         # case des PIEDS du Roi (sur l'estrade du trône)
 
 func generate() -> void:
 	grid.resize(GRID_W * GRID_H)
@@ -157,20 +162,27 @@ func _place_transit() -> void:
 	for iy in [TRANSIT_TOP + 4, TRANSIT_TOP + 12]:
 		var x0 := randi_range(3, 10)
 		var x1 := GRID_W - 1 - randi_range(3, 10)
+		# L'axe INFÉRIEUR se termine sur le terminal du Roi des Galeries (M5) :
+		# l'arène occupe le bout droit, le tunnel « public » s'arrête à sa porte.
+		var is_arena_axis: bool = int(iy) == TRANSIT_TOP + 12
+		var ax := x1 - ARENA_W + 1                  # 1re colonne intérieure de l'arène
+		var x_end := ax - 2 if is_arena_axis else x1  # fin du tunnel public
 		for x in range(x0, x1 + 1):
 			grid[(iy - 1) * GRID_W + x] = WALL          # plafond béton
 			grid[(iy + METRO_H) * GRID_W + x] = WALL    # sol béton (les rails)
 			for y in range(iy, iy + METRO_H):
 				grid[y * GRID_W + x] = EMPTY
-		metro_rects.append(Rect2i(x0, iy, x1 - x0 + 1, METRO_H))
+		metro_rects.append(Rect2i(x0, iy, x_end - x0 + 1, METRO_H))
 		# Gravats (se sautent) et conteneurs épars le long des rails
 		for n in 10:
-			var gx := randi_range(x0 + 4, x1 - 4)
+			var gx := randi_range(x0 + 4, x_end - 4)
 			grid[(iy + METRO_H - 1) * GRID_W + gx] = DIRT if randf() < 0.7 else CRATE
 		# Deux stations par axe, une dans chaque moitié
-		var mid := (x0 + x1) / 2
+		var mid := (x0 + x_end) / 2
 		_carve_station(randi_range(x0 + 6, mid - STATION_W - 4), iy)
-		_carve_station(randi_range(mid + 4, x1 - STATION_W - 6), iy)
+		_carve_station(randi_range(mid + 4, x_end - STATION_W - 6), iy)
+		if is_arena_axis:
+			_carve_arena(ax, iy)
 	# Légendaire n°1 : prisonnier de la DERNIÈRE station (la mieux gardée) — sur le quai.
 	var st: Rect2i = stations[stations.size() - 1]
 	captive_spots.append({"cell": Vector2i(st.position.x + 3, st.position.y + st.size.y - 2),
@@ -213,6 +225,38 @@ func _carve_station(sx: int, tunnel_iy: int) -> void:
 		grid[(fy - 2) * GRID_W + x] = WALL
 	grid[(fy - 1) * GRID_W + sx + STATION_W - 2] = CRATE
 	stations.append(Rect2i(sx, top, STATION_W, STATION_H))
+
+func _carve_arena(ax: int, tunnel_iy: int) -> void:
+	# L'antre du Roi des Galeries (M5) : un terminal monumental au bout de l'axe
+	# inférieur — même gabarit vertical que les stations (le sol de l'axe 1 sert
+	# de plafond). Le tunnel y entre par des PORTES scellées (BOSS_DOOR, [E]).
+	var fy := tunnel_iy + METRO_H            # rangée du sol (béton)
+	var top := fy - STATION_H                # 1re rangée intérieure
+	for y in range(top - 1, fy + 1):
+		for x in range(ax - 1, ax + ARENA_W + 1):
+			var border := x == ax - 1 or x == ax + ARENA_W or y == top - 1 or y == fy
+			grid[y * GRID_W + x] = WALL if border else EMPTY
+	boss_arena = Rect2i(ax, top, ARENA_W, STATION_H)
+	# Les portes : l'ouverture du tunnel, scellée (s'ouvre/se referme via boss.gd)
+	boss_door_cells = []
+	for y in range(tunnel_iy, tunnel_iy + METRO_H):
+		grid[y * GRID_W + ax - 1] = BOSS_DOOR
+		boss_door_cells.append(Vector2i(ax - 1, y))
+	# Quai à gauche (plateforme d'esquive) + caisses à fouiller
+	for x in range(ax + 3, ax + 10):
+		grid[(fy - 1) * GRID_W + x] = WALL
+	grid[(fy - 2) * GRID_W + ax + 4] = CRATE
+	grid[(fy - 1) * GRID_W + ax + 12] = CRATE
+	# Piliers suspendus (décor : les gravats tombent du plafond, on passe dessous)
+	for px in [ax + 13, ax + 20]:
+		for y in range(top, fy - 3):
+			grid[y * GRID_W + px] = WALL
+	# Estrade du trône à droite (2 marches) — le Roi s'y dresse
+	for x in range(ax + ARENA_W - 6, ax + ARENA_W):
+		grid[(fy - 1) * GRID_W + x] = WALL
+	for x in range(ax + ARENA_W - 4, ax + ARENA_W):
+		grid[(fy - 2) * GRID_W + x] = WALL
+	boss_spawn = Vector2i(ax + ARENA_W - 3, fy - 3)
 
 # --- Le Foyer (géométrie de la grille de modules, partagée avec foyer.gd) -------
 func hall_origin() -> Vector2i:   # coin haut-gauche (tuiles) du module HALL de départ
@@ -264,8 +308,10 @@ func is_ladder_crossing(tx: int, ty: int) -> bool:
 func is_diggable(tx: int, ty: int) -> bool:
 	var t := tile(tx, ty)
 	return t == DIRT or t == ROCK or t == WOOD or t == LITHIUM or t == WALL \
-		or t == HARDROCK or t == PASSERELLE or t == IRON
-	# (les conteneurs CRATE ne se creusent pas : ils se FOUILLENT, touche E)
+		or t == PASSERELLE or t == IRON
+	# (les conteneurs CRATE ne se creusent pas : ils se FOUILLENT, touche E ;
+	#  la HARDROCK ne se creuse PLUS : seule la charge de perçage du Roi des
+	#  Galeries l'ouvre — M5 ; les BOSS_DOOR s'ouvrent au [E], cf. boss.gd)
 
 func dig_mult(t: int) -> float:
 	if t == HARDROCK:

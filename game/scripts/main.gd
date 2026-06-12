@@ -38,10 +38,14 @@ var inv_ui: InvUI
 var room_ui: RoomUI
 var trade_ui: TradeUI
 
+var boss: BossFight               # le Roi des Galeries (M5)
+
 var dig_level := 0                # palier d'outil : 0 Pierre, 1 Fer, 2 Acier
 var dig_target := Vector2i(-1, -1)
 var dig_progress := 0.0
 var won := false
+var pierced := false              # la charge de perçage a ouvert le puits de la barrière
+var play_time := 0.0              # temps de survie (stats de l'écran de fin)
 var inv_open := false             # l'écran d'inventaire est ouvert (fige le jeu)
 
 # Mode placement (construction libre) : type de pièce en cours, -1 sinon.
@@ -116,6 +120,14 @@ func _ready() -> void:
 	raids = Raids.new(world, foyer, pop, crew, hero, light, bag)
 	combat.raids = raids
 	marker.raids = raids
+	boss = BossFight.new(world, hero, crew, raids)
+	boss.mark_dirty = Callable(view, "mark_dirty")   # les portes sont des occulteurs
+	marker.boss = boss
+	# Braseros du terminal du Roi : son antre rougeoie, on la repère de loin
+	var ba := world.boss_arena
+	for gx in [4, 14, 24]:
+		lights.add_glow(Vector2(float(ba.position.x + gx) * WorldGrid.TILE,
+			float(ba.position.y + 2) * WorldGrid.TILE), Color(1.0, 0.45, 0.22), 0.7, 0.7)
 	# Écrans plein écran (masqués par défaut), au-dessus du HUD
 	inv_ui = InvUI.new()
 	inv_ui.bag = bag
@@ -143,15 +155,18 @@ func _setup_screen(ui: Control) -> void:
 	ui.visible = false
 	hud.add_child(ui)
 
-# Un écran est ouvert (inventaire, cellule, troc) → fige héros/robots/armes/creusage.
+# Un écran est ouvert (inventaire, cellule, troc, fin) → fige héros/robots/armes/creusage.
 func _ui_open() -> bool:
-	return inv_open or room_ui.visible or trade_ui.visible
+	return inv_open or room_ui.visible or trade_ui.visible or hud.end_visible()
 
 # --- Boucle -------------------------------------------------------------------
 func _physics_process(delta: float) -> void:
 	hero.move(delta, not _ui_open())
 	if not _ui_open():
 		crew.update(delta)   # un écran ouvert fige le jeu (héros ET robots)
+		for m in boss.update(delta):
+			hud.flash(m)
+		raids.hold = boss.fighting()   # pas de compte à rebours de raid pendant le boss
 		for m in raids.update(delta):
 			hud.flash(m)
 	if hero.hp <= 0.0:
@@ -159,6 +174,7 @@ func _physics_process(delta: float) -> void:
 	camera.global_position = hero.pos
 
 func _process(delta: float) -> void:
+	play_time += delta
 	_update_aim()
 	hero.deplete_lamp(delta)
 	foyer.produce(delta, pop)
@@ -197,6 +213,10 @@ func _process(delta: float) -> void:
 		trade_ui.queue_redraw() # le compte à rebours de départ vit
 
 func _input(event: InputEvent) -> void:
+	if hud.end_visible():   # écran de fin : une touche/un clic pour reprendre
+		if (event is InputEventKey or event is InputEventMouseButton) and event.pressed:
+			hud.hide_end()
+		return
 	if event is InputEventKey and event.pressed and not event.echo:
 		var panel_open := room_ui.visible or trade_ui.visible
 		if event.keycode == KEY_ESCAPE:
@@ -263,15 +283,26 @@ func _update_aim() -> void:
 		hero.aim = v.normalized()
 
 func _check_exit() -> void:
-	# Victoire : rejoindre la SORTIE en surface (zone centrale, au niveau du sol ou au-dessus).
+	# Fin du MVP : le PREMIER PAS à l'air libre, après avoir percé la barrière
+	# avec la charge du Roi (seul passage possible vers la surface).
 	if won:
 		return
-	var cx := world.exit_col()
 	var tx := int(hero.pos.x / WorldGrid.TILE)
 	var ty := int((hero.pos.y + hero.half.y) / WorldGrid.TILE)   # niveau des pieds
-	if absi(tx - cx) <= WorldGrid.EXIT_HALF and ty <= world.surface[clampi(tx, 0, WorldGrid.GRID_W - 1)]:
+	if ty <= world.surface[clampi(tx, 0, WorldGrid.GRID_W - 1)]:
 		won = true
-		hud.flash("*** SORTI ! Tu as rejoint la surface. Bravo ! ***")
+		hud.show_end(_end_text())
+
+func _end_text() -> String:
+	var mins := int(play_time / 60.0)
+	var secs := int(play_time) % 60
+	return "***  FIN DU MVP — LES ENFOUIS  ***\n\n" \
+		+ "Tu as vaincu le Roi des Galeries, perce la barriere\nde roche dense et rejoint la SURFACE a l'air libre.\n\n" \
+		+ "Temps de survie     : %d min %02d s\n" % [mins, secs] \
+		+ "PNJ au Foyer        : %d\n" % pop.npcs.size() \
+		+ "Raids repousses     : %d\n" % raids.repelled \
+		+ "Ressources en stock : %d\n\n" % foyer.stored_total() \
+		+ "(une touche pour continuer a jouer librement)"
 
 # --- Mort / cache -------------------------------------------------------------
 func _die() -> void:
@@ -284,6 +315,7 @@ func _die() -> void:
 			cache[t] = bag.count(t)
 		bag.clear()
 	hero.spawn()   # réapparition au Foyer, PV au max
+	boss.notify_hero_death()   # le Roi regagne son trône, l'arène se rescelle
 	hud.flash("Tu es mort... reapparition au Foyer." + ("  >> CACHE laissee sur place <<" if cache_active else ""))
 
 # --- Construction libre (mode placement) -----------------------------------------
@@ -356,6 +388,11 @@ func _interact() -> void:
 	if cache_active and hero.pos.distance_to(cache_pos) <= CACHE_RANGE:
 		_recover_cache()
 		return
+	if boss.door_near(hero.pos):
+		hud.flash(boss.try_open())
+		return
+	if boss.charge_taken and not pierced and _pierce_barrier():
+		return
 	var ci := _captive_near()
 	if ci >= 0:
 		hud.flash(pop.free_captive(ci))
@@ -387,6 +424,24 @@ func _interact() -> void:
 			hud.flash("Atelier : outil au maximum   [4] cartouche anti-gaz (5 Li + 3 bois)")
 	else:
 		_deposit()   # hall et entrepôt : dépôt rapide du sac
+
+# La charge de perçage du Roi (M5) : [E] juste SOUS la barrière → un puits
+# d'échelles s'ouvre à travers la roche dense, la voie de la surface est libre.
+func _pierce_barrier() -> bool:
+	var ts := WorldGrid.TILE
+	var cx := int(hero.pos.x / ts)
+	var feet := int((hero.pos.y + hero.half.y - 1.0) / ts)
+	var base := WorldGrid.BAND_TOP + WorldGrid.BAND_H
+	if feet < base or feet > base + 2:
+		hud.flash("La charge doit etre posee juste SOUS la barriere de roche dense.")
+		return false
+	for y in range(WorldGrid.BAND_TOP, feet):
+		world.set_tile(cx, y, WorldGrid.LADDER)
+	pierced = true
+	view.mark_dirty()
+	marker.add_flash(Vector2i(cx, WorldGrid.BAND_TOP + 2), 0.3)
+	hud.flash("BOOM ! La charge perce la barriere — un puits d'echelles monte vers la SURFACE. REMONTE !")
+	return true
 
 func _deposit() -> void:
 	var moved_total := 0
@@ -525,10 +580,7 @@ func _upgrade_tool() -> void:
 		return
 	foyer.pay(cost)
 	dig_level += 1
-	if dig_level == 1:
-		hud.flash("Outil FER forge ! La roche dense de la barriere peut etre entamee.")
-	else:
-		hud.flash("Outil ameliore : %s (creusage plus rapide)" % TIER_NAMES[dig_level])
+	hud.flash("Outil ameliore : %s (creusage plus rapide)" % TIER_NAMES[dig_level])
 
 static func _cost_text(cost: Dictionary) -> String:
 	var parts := []
@@ -562,12 +614,12 @@ func _handle_dig(delta: float) -> void:
 	var m := get_global_mouse_position()
 	var tx := int(floor(m.x / WorldGrid.TILE))
 	var ty := int(floor(m.y / WorldGrid.TILE))
+	if world.tile(tx, ty) == WorldGrid.HARDROCK and _in_reach(tx, ty):
+		_reset_dig()   # indestructible : seul l'indice s'affiche (charge du Roi, M5)
+		hud.flash("Roche dense : rien ne l'entame. Le ROI DES GALERIES detiendrait de quoi la percer...")
+		return
 	if not world.is_diggable(tx, ty) or not _in_reach(tx, ty):
 		_reset_dig()
-		return
-	if world.tile(tx, ty) == WorldGrid.HARDROCK and dig_level < 1:
-		_reset_dig()
-		hud.flash("Roche dense : outil en Fer requis (atelier puis amelioration)")
 		return
 	var cell := Vector2i(tx, ty)
 	if cell != dig_target:
@@ -621,10 +673,16 @@ func _update_hud() -> void:
 		bagline += "  (PLEIN)"
 	if cache_active:
 		bagline += "     >> CACHE a recuperer <<"
-	var obj := "Objectif: REMONTER a la surface (barriere de roche dense = outil Fer)"
+	var obj := "Objectif: vaincre le ROI DES GALERIES (terminal scelle au bout du tunnel inferieur)"
 	if won:
-		obj = "*** SORTI ! Tu as rejoint la surface ***"
-	elif hero.in_gas():
+		obj = "*** FIN DU MVP : tu as rejoint la surface ! ***"
+	elif pierced:
+		obj = "Objectif: REMONTE par le puits perce dans la barriere, jusqu'a la SURFACE !"
+	elif boss.charge_taken:
+		obj = "Objectif: pose la CHARGE DE PERCAGE juste sous la barriere ([E]) puis remonte"
+	elif boss.state == BossFight.ST_DEAD:
+		obj = "Objectif: ramasse la CHARGE DE PERCAGE dans le terminal du Roi"
+	if not won and hero.in_gas():
 		obj += ("   [GAZ: protege]" if (hero.antipol_on and hero.antipol_fuel > 0.0) else "   !! GAZ TOXIQUE : -PV !!")
 	var weap := "Arme: melee" if combat.weapon == 0 else "Arme: feu (%d mun.)" % combat.ammo
 	var antigas := "Anti-gaz: %s (%d)" % ["ON" if hero.antipol_on else "off", hero.antipol_charges()]

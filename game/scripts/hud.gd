@@ -8,6 +8,8 @@ var stats_label: Label
 var msg_label: Label
 var hint_label: Label
 var msg_t := 0.0
+var end_panel: ColorRect      # écran de fin du MVP (M5) : voile + texte centré
+var end_label: Label
 
 func _ready() -> void:
 	stats_label = Label.new()
@@ -25,6 +27,29 @@ func _ready() -> void:
 	hint_label.add_theme_color_override("font_color", Color(0.62, 0.68, 0.62))
 	hint_label.position = Vector2(12, 522)
 	add_child(hint_label)
+	# Écran de fin (masqué) : voile sombre plein écran + texte doré centré
+	end_panel = ColorRect.new()
+	end_panel.color = Color(0.02, 0.02, 0.04, 0.82)
+	end_panel.set_anchors_preset(Control.PRESET_FULL_RECT)
+	end_panel.visible = false
+	add_child(end_panel)
+	end_label = Label.new()
+	end_label.set_anchors_preset(Control.PRESET_FULL_RECT)
+	end_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	end_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	end_label.add_theme_font_size_override("font_size", 15)
+	end_label.add_theme_color_override("font_color", Color(1.0, 0.88, 0.55))
+	end_panel.add_child(end_label)
+
+func show_end(text: String) -> void:
+	end_label.text = text
+	end_panel.visible = true
+
+func hide_end() -> void:
+	end_panel.visible = false
+
+func end_visible() -> bool:
+	return end_panel != null and end_panel.visible
 
 func set_stats(text: String) -> void:
 	stats_label.text = text

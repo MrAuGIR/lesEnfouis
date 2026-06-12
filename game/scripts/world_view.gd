@@ -92,6 +92,7 @@ static func _enemy_color(kind: int) -> Color:
 		EnemyCrew.KIND_FONCEUR: return Color(0.72, 0.48, 0.32)   # cuir de pilleur
 		EnemyCrew.KIND_TIREUR: return Color(0.55, 0.58, 0.38)    # treillis olive
 		EnemyCrew.KIND_LOURD: return Color(0.45, 0.48, 0.55)     # acier
+		EnemyCrew.KIND_BOSS: return Color(0.48, 0.18, 0.26)      # pourpre du Roi
 	return Color(0.85, 0.30, 0.25)                               # robot
 
 # Palette des blocs (partagée avec l'éclairage de face de marker_view.gd)
@@ -105,6 +106,7 @@ static func tile_color(t: int) -> Color:
 		WorldGrid.IRON: return Color(0.58, 0.40, 0.30)
 		WorldGrid.CRATE: return Color(0.52, 0.38, 0.18)
 		WorldGrid.CRATE_OPEN: return Color(0.30, 0.25, 0.15)
+		WorldGrid.BOSS_DOOR: return Color(0.40, 0.17, 0.14)
 	return Color(0.42, 0.30, 0.20)   # terre
 
 func _draw() -> void:
@@ -147,6 +149,12 @@ func _draw() -> void:
 				draw_rect(Rect2(tx * ts, ty * ts + 4, ts, 1), Color(0.24, 0.16, 0.06))
 				draw_rect(Rect2(tx * ts, ty * ts + 10, ts, 1), Color(0.24, 0.16, 0.06))
 				draw_rect(rect, Color(0.7, 0.55, 0.28, 0.8), false, 1.0)
+				continue
+			if t == WorldGrid.BOSS_DOOR:
+				# Portes scellées du terminal du Roi : métal rouillé barré
+				draw_rect(rect, tile_color(t))
+				draw_rect(Rect2(tx * ts, ty * ts + 6, ts, 3), Color(0.62, 0.30, 0.18))
+				draw_rect(rect, Color(0.14, 0.06, 0.05), false, 1.5)
 				continue
 			if t == WorldGrid.CRATE or t == WorldGrid.CRATE_OPEN:
 				# Conteneur (fouillable [E] ; ouvert = vidé) : caisse à planches croisées
