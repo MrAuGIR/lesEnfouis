@@ -105,8 +105,10 @@ func _draw_assign(font: Font) -> void:
 		draw_rect(r, Color(0.45, 0.48, 0.54, 0.8), false, 1.0)
 		if i < assigned.size():
 			var npc: Dictionary = pop.npcs[assigned[i]]
-			draw_string(font, r.position + Vector2(8, 19), "Poste %d :  %s    (Travail %d / Garde %d)    [clic : retirer]" % \
-				[i + 1, npc["name"], int(npc["travail"]), int(npc["garde"])], HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(0.85, 0.95, 0.85))
+			var state := "  BLESSE !" if bool(npc.get("down", false)) else ""
+			draw_string(font, r.position + Vector2(8, 19), "Poste %d :  %s%s    (Travail %d / Garde %d)    [clic : retirer]" % \
+				[i + 1, npc["name"], state, int(npc["travail"]), int(npc["garde"])], HORIZONTAL_ALIGNMENT_LEFT, -1, 12,
+				Color(0.95, 0.6, 0.55) if state != "" else Color(0.85, 0.95, 0.85))
 		else:
 			draw_string(font, r.position + Vector2(8, 19), "Poste %d :  + affecter un PNJ (clic)" % (i + 1),
 				HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(0.65, 0.7, 0.75))
@@ -121,6 +123,8 @@ func _draw_assign(font: Font) -> void:
 			var where := "libre"
 			if npc["cell"] != null:
 				where = String(Foyer.ROOM_NAMES[int(foyer.rooms[Vector2i(npc["cell"])]["type"])])
+			if bool(npc.get("down", false)):
+				where += " - BLESSE"
 			draw_rect(r, Color(0.13, 0.15, 0.19, 0.9))
 			draw_rect(r, Color(0.4, 0.42, 0.48, 0.7), false, 1.0)
 			var col := Color(0.55, 0.75, 0.55) if here else Color(0.95, 0.95, 0.95)

@@ -27,6 +27,7 @@ var foyer: Foyer
 var pop: Population
 var caravan: Caravan
 var crew: EnemyCrew
+var raids: Raids
 var combat: Combat
 var view: WorldView
 var marker: MarkerView
@@ -112,6 +113,9 @@ func _ready() -> void:
 	add_child(hud)
 	combat = Combat.new(hero, world, crew, bag, hud, marker)
 	marker.combat = combat
+	raids = Raids.new(world, foyer, pop, crew, hero, light, bag)
+	combat.raids = raids
+	marker.raids = raids
 	# Écrans plein écran (masqués par défaut), au-dessus du HUD
 	inv_ui = InvUI.new()
 	inv_ui.bag = bag
@@ -148,6 +152,8 @@ func _physics_process(delta: float) -> void:
 	hero.move(delta, not _ui_open())
 	if not _ui_open():
 		crew.update(delta)   # un écran ouvert fige le jeu (héros ET robots)
+		for m in raids.update(delta):
+			hud.flash(m)
 	if hero.hp <= 0.0:
 		_die()
 	camera.global_position = hero.pos
@@ -365,8 +371,11 @@ func _interact() -> void:
 	if rk == null:
 		return
 	var room := int(foyer.rooms[rk]["type"])
-	if room == Foyer.ROOM_PROD:
+	if room == Foyer.ROOM_PROD or room == Foyer.ROOM_DEFENSE:
 		room_ui.open_assign(Vector2i(rk))
+	elif room == Foyer.ROOM_INFIRMERIE:
+		hud.flash("Infirmerie : %d blesse(s) au Foyer (%d lit(s) de soin par infirmerie)" % \
+			[pop.down_count(), Foyer.INFIRM_BEDS])
 	elif room == Foyer.ROOM_DORTOIR:
 		hero.hp = Hero.MAX_HP
 		hud.flash("Tu te reposes au dortoir : PV au maximum.")
@@ -620,10 +629,13 @@ func _update_hud() -> void:
 	var weap := "Arme: melee" if combat.weapon == 0 else "Arme: feu (%d mun.)" % combat.ammo
 	var antigas := "Anti-gaz: %s (%d)" % ["ON" if hero.antipol_on else "off", hero.antipol_charges()]
 	var car_status := "ICI ! (%d s)" % maxi(0, int(caravan.stay_t)) if caravan.present else "dans %d s" % maxi(0, int(caravan.timer))
-	var foyer_line := "Foyer  - Dortoir:%d  Prod:%d  Atelier:%d  Entrepot:%d    PNJ: %d/%d    Caravane: %s" % [
+	var npc_status := "%d/%d" % [pop.npcs.size(), foyer.dortoir_capacity()]
+	if pop.down_count() > 0:
+		npc_status += " (%d blesse(s))" % pop.down_count()
+	var foyer_line := "Foyer  - Dortoir:%d  Prod:%d  Atelier:%d  Entrepot:%d    PNJ: %s    Caravane: %s    |    %s" % [
 		foyer.room_count(Foyer.ROOM_DORTOIR), foyer.room_count(Foyer.ROOM_PROD),
 		foyer.room_count(Foyer.ROOM_ATELIER), foyer.room_count(Foyer.ROOM_ENTREPOT),
-		pop.npcs.size(), foyer.dortoir_capacity(), car_status]
+		npc_status, car_status, raids.status_text()]
 	var hint := "[ZQSD/Fleches] bouger  [Espace] saut  [Clic G] creuser  [Clic D] attaquer  [X] arme  [I] inventaire  [B] construire  [F] echelle  [G] passerelle  [R] lampe  [T] torche  [M] anti-gaz  [E] agir  [Q] retirer  [K] mort"
 	if placing >= 0:
 		hint = "PLACEMENT : %s >  clique un slot vert (colle a une piece, une echelle ou une passerelle)   [B]/[Echap]/clic droit : annuler" % Foyer.ROOM_NAMES[placing]

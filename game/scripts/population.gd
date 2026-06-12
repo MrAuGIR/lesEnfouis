@@ -8,6 +8,12 @@ extends RefCounted
 const ARRIVAL_INTERVAL := 45.0   # s entre deux arrivées — CONFORT DE TEST (M6)
 const WALK_SPEED := 26.0
 const NPC_HALF := Vector2(5, 11)
+# Blessures (M4) : à 0 PV un PNJ tombe BLESSÉ (inactif), jamais de mort définitive
+# (GDD 03). Transport auto vers un lit d'infirmerie libre ; sans lit, il récupère
+# sur place, beaucoup plus lentement.
+const NPC_HP := 40.0
+const HEAL_TIME := 40.0          # s de soin sur un lit d'infirmerie
+const GROUND_HEAL := 150.0       # s de récupération au sol (pas de lit libre)
 const FIRST_NAMES := ["Marek", "Lena", "Igor", "Sacha", "Mina", "Pavel", "Jeanne",
 	"Theo", "Olga", "Bruno", "Anya", "Karl", "Sonia", "Milo", "Vera", "Dima"]
 const LAST_NAMES := ["Kovac", "Fersen", "Brodski", "Lemaire", "Volkov", "Marchal",
@@ -48,8 +54,66 @@ func update(delta: float) -> String:
 				[npc["name"], int(npc["travail"]), int(npc["garde"])]
 	incoming = incoming.filter(func(inc): return float(inc["t"]) > 0.0)
 	for npc in npcs:
-		_walk(npc, delta)
+		if bool(npc.get("down", false)):
+			var m := _heal(npc, delta)
+			if m != "":
+				msg = m
+		else:
+			_walk(npc, delta)
 	return msg
+
+# --- Blessés (M4) -------------------------------------------------------------------
+# Inflige des dégâts à un PNJ (raid). Renvoie le message à afficher ("" sinon).
+func hurt_npc(npc: Dictionary, dmg: float) -> String:
+	if bool(npc.get("down", false)):
+		return ""
+	npc["hp"] = float(npc.get("hp", NPC_HP)) - dmg
+	if float(npc["hp"]) <= 0.0:
+		npc["down"] = true
+		npc["heal_cell"] = null
+		npc["heal_t"] = GROUND_HEAL
+		return "%s est blesse(e) ! (soins : infirmerie)" % npc["name"]
+	return ""
+
+func down_count() -> int:
+	var n := 0
+	for npc in npcs:
+		if bool(npc.get("down", false)):
+			n += 1
+	return n
+
+func _heal(npc: Dictionary, delta: float) -> String:
+	var msg := ""
+	if npc.get("heal_cell") == null:
+		var bed = _free_bed()
+		if bed != null:   # transport auto vers le lit (grey-box : téléporté)
+			npc["heal_cell"] = bed
+			npc["heal_t"] = HEAL_TIME
+			var ir := foyer.interior(Vector2i(bed))
+			npc["pos"] = Vector2((ir.position.x + ir.size.x * 0.5) * WorldGrid.TILE,
+				float(ir.position.y + ir.size.y) * WorldGrid.TILE - NPC_HALF.y)
+			msg = "%s est transporte(e) a l'infirmerie." % npc["name"]
+	npc["heal_t"] = float(npc["heal_t"]) - delta
+	if float(npc["heal_t"]) <= 0.0:
+		npc["down"] = false
+		npc["hp"] = NPC_HP
+		npc["heal_cell"] = null
+		msg = "%s est sur pied !" % npc["name"]
+	return msg
+
+# Une infirmerie avec un lit de soin libre, ou null.
+func _free_bed():
+	for mp in foyer.rooms:
+		if int(foyer.rooms[mp]["type"]) != Foyer.ROOM_INFIRMERIE:
+			continue
+		var used := 0
+		for npc in npcs:
+			if bool(npc.get("down", false)) and npc.get("heal_cell") != null \
+					and Vector2i(npc["heal_cell"]) == Vector2i(mp):
+				used += 1
+		if used < Foyer.INFIRM_BEDS:
+			return mp
+	return null
 
 # --- Affectation (cell = coord. module de la pièce, ou null si libre) -------------
 func assigned_to(cell: Vector2i) -> Array:
@@ -79,6 +143,7 @@ func _arrive() -> String:
 		"pos": Vector2(foyer.pos.x, (o.y + WorldGrid.MOD_H - 1) * WorldGrid.TILE - NPC_HALF.y),
 		"dir": (1.0 if randf() < 0.5 else -1.0),
 		"pause": 1.5,
+		"hp": NPC_HP, "down": false, "heal_t": 0.0, "heal_cell": null, "def_cd": 0.0,
 	}
 	npcs.append(npc)
 	return "Un survivant rejoint le Foyer : %s (Travail %d / Garde %d)" % \
@@ -108,6 +173,7 @@ func free_captive(i: int) -> String:
 		"cell": null,
 		"pos": Vector2(foyer.pos.x, (o.y + WorldGrid.MOD_H - 1) * WorldGrid.TILE - NPC_HALF.y),
 		"dir": 1.0, "pause": 1.5,
+		"hp": NPC_HP, "down": false, "heal_t": 0.0, "heal_cell": null, "def_cd": 0.0,
 	}})
 	return "%s est libre ! Il/elle rejoint le Foyer par ses propres moyens. (Travail %d / Garde %d)" % \
 		[c["name"], int(c["travail"]), int(c["garde"])]

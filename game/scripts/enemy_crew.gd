@@ -137,6 +137,8 @@ func update(delta: float) -> void:
 		s.t -= delta
 	shots = shots.filter(func(s): return s.t > 0.0)
 	for e in list:
+		if e.get("raid", false):
+			continue   # les assaillants de raid sont pilotés par raids.gd
 		e["hit_cd"] = maxf(0.0, float(e["hit_cd"]) - delta)
 		e["flash"] = maxf(0.0, float(e["flash"]) - delta)
 		e["shoot_cd"] = maxf(0.0, float(e["shoot_cd"]) - delta)

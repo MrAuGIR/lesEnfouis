@@ -12,14 +12,20 @@ const ROOM_PROD := 1
 const ROOM_ATELIER := 2
 const ROOM_ENTREPOT := 3
 const ROOM_HALL := 4              # le module de départ (préconstruit, unique)
-const BUILDABLE := [ROOM_DORTOIR, ROOM_PROD, ROOM_ATELIER, ROOM_ENTREPOT]
-const ROOM_NAMES := ["Dortoir", "Production (rations)", "Atelier", "Entrepot", "Hall"]
+const ROOM_INFIRMERIE := 5        # lits de soin : les blessés des raids y guérissent (M4)
+const ROOM_DEFENSE := 6           # bunker-défense : les PNJ affectés tirent sur les raids (M4)
+const BUILDABLE := [ROOM_DORTOIR, ROOM_PROD, ROOM_ATELIER, ROOM_ENTREPOT,
+	ROOM_INFIRMERIE, ROOM_DEFENSE]
+const ROOM_NAMES := ["Dortoir", "Production (rations)", "Atelier", "Entrepot", "Hall",
+	"Infirmerie", "Bunker-defense"]
 const ROOM_NOTES := [
 	"+3 lits : des survivants arrivent tant qu'il y a de la place",
 	"3 postes de travail : affecte des PNJ ([E] dans la piece)",
 	"debloque [3] ameliorer l'outil et [4] cartouche anti-gaz",
 	"+300 de capacite de stockage",
 	"le coeur du Foyer : depot, arrivees, caravane",
+	"2 lits de soin : les blesses des raids y guerissent vite",
+	"2 postes de garde : les PNJ affectes tirent sur les assaillants",
 ]
 const ROOM_COSTS: Array = [
 	{WorldGrid.WOOD: 10, WorldGrid.ROCK: 6},
@@ -27,9 +33,12 @@ const ROOM_COSTS: Array = [
 	{WorldGrid.ROCK: 15, WorldGrid.WOOD: 6},
 	{WorldGrid.ROCK: 12, WorldGrid.WOOD: 10},
 	{},
+	{WorldGrid.ROCK: 10, WorldGrid.WOOD: 8, WorldGrid.LITHIUM: 4},
+	{WorldGrid.ROCK: 12, WorldGrid.IRON: 6, WorldGrid.WOOD: 6},
 ]
-const ROOM_SLOTS := [0, 3, 0, 0, 0]  # postes de travail par type de pièce
+const ROOM_SLOTS := [0, 3, 0, 0, 0, 0, 2]  # postes de travail par type de pièce
 const DORTOIR_BEDS := 3           # capacité PNJ par dortoir
+const INFIRM_BEDS := 2            # lits de soin par infirmerie
 const PROD_INTERVAL := 10.0       # s entre deux cycles de production
 const CAP_BASE := 300             # capacité de stockage sans entrepôt
 const CAP_ENTREPOT := 300         # capacité ajoutée par entrepôt
@@ -241,6 +250,7 @@ func produce(delta: float, pop) -> void:
 	for mp in rooms:
 		if int(rooms[mp]["type"]) == ROOM_PROD:
 			for n in pop.assigned_to(mp):
-				made += int(pop.npcs[n]["travail"])
+				if not bool(pop.npcs[n].get("down", false)):   # un blessé ne produit pas
+					made += int(pop.npcs[n]["travail"])
 	if made > 0:
 		add(Inventory.RATIONS, made)

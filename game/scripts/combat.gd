@@ -28,6 +28,7 @@ var crew: EnemyCrew
 var bag: Inventory
 var hud: Hud
 var view: MarkerView          # feedbacks (flash, traceur lus par le calque marqueurs)
+var raids: Raids              # branché par main.gd : butin des porteurs abattus (M4)
 
 var weapon := 0                  # arme courante : 0 = mêlée, 1 = arme à feu
 var ammo := START_AMMO           # munitions (réserve dédiée, pas dans le sac)
@@ -121,6 +122,9 @@ func _cull() -> void:
 			alive.append(e)
 			continue
 		view.add_flash(Vector2i(int(e["pos"].x / ts), int(e["pos"].y / ts)), 0.3)
+		# Porteur de raid abattu : son butin volé tombe au sol (récupérable).
+		if raids != null and not (e.get("carry", {}) as Dictionary).is_empty():
+			raids.drop_at(Vector2(e["pos"]), e["carry"])
 		var kind := int(e["kind"])
 		var got_ammo := 0
 		var lootmsg := ""

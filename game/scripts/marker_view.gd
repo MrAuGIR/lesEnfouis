@@ -11,8 +11,11 @@ const ROOM_TINTS := [
 	Color(0.95, 0.55, 0.30, 0.10),   # atelier
 	Color(0.50, 0.65, 0.95, 0.10),   # entrepôt
 	Color(0.75, 0.85, 0.80, 0.07),   # hall
+	Color(0.95, 0.40, 0.40, 0.10),   # infirmerie
+	Color(0.60, 0.62, 0.70, 0.10),   # bunker-défense
 ]
-const ROOM_LABELS := ["DORTOIR", "PROD. RATIONS", "ATELIER", "ENTREPOT", "HALL"]
+const ROOM_LABELS := ["DORTOIR", "PROD. RATIONS", "ATELIER", "ENTREPOT", "HALL",
+	"INFIRMERIE", "BUNKER-DEF."]
 
 var world: WorldGrid
 var hero: Hero
@@ -22,6 +25,7 @@ var pop: Population
 var caravan: Caravan
 var crew: EnemyCrew
 var combat: Combat
+var raids: Raids
 
 var dig_target := Vector2i(-1, -1)
 var dig_frac := 0.0               # progression du creusage (0..1)
@@ -143,12 +147,22 @@ func _draw() -> void:
 		draw_rect(Rect2(loot_cell.x * ts, loot_cell.y * ts, ts, ts), Color(1.0, 0.9, 0.5, 0.8), false, 1.0)
 		draw_string(font, Vector2(loot_cell.x * ts - 8, loot_cell.y * ts - 4), "[E] FOUILLER",
 			HORIZONTAL_ALIGNMENT_LEFT, -1, 7, Color(1.0, 0.9, 0.5))
-	# Noms des PNJ
+	# Butin de raid tombé au sol (porteur abattu) : ramassage auto au contact
+	if raids != null:
+		for dr in raids.drops:
+			var dp: Vector2 = dr["pos"]
+			draw_rect(Rect2(dp + Vector2(-4, -4), Vector2(8, 8)), Color(0.85, 0.68, 0.22))
+			draw_string(font, dp + Vector2(-12, -8), "BUTIN", HORIZONTAL_ALIGNMENT_LEFT, -1, 7, Color(1.0, 0.85, 0.4))
+	# Noms des PNJ (un blessé est signalé en rouge)
 	for npc in pop.npcs:
 		var np: Vector2 = npc["pos"]
 		var nm := String(npc["name"]).split(" ")[0]
+		if bool(npc.get("down", false)):
+			nm += " (BLESSE)"
 		var nw := font.get_string_size(nm, HORIZONTAL_ALIGNMENT_LEFT, -1, 6).x
-		draw_string(font, np + Vector2(-nw * 0.5, -Population.NPC_HALF.y - 3.0), nm, HORIZONTAL_ALIGNMENT_LEFT, -1, 6, Color(0.8, 0.88, 0.95, 0.9))
+		var ncol := Color(0.95, 0.45, 0.40, 0.95) if bool(npc.get("down", false)) \
+			else Color(0.8, 0.88, 0.95, 0.9)
+		draw_string(font, np + Vector2(-nw * 0.5, -Population.NPC_HALF.y - 3.0), nm, HORIZONTAL_ALIGNMENT_LEFT, -1, 6, ncol)
 	# Caravane : étiquette + zone de troc
 	if caravan.present:
 		draw_circle(caravan.pos, Caravan.TRADE_RANGE, Color(0.9, 0.7, 0.3, 0.07))

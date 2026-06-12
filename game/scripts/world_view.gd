@@ -195,9 +195,19 @@ func _draw() -> void:
 			# Plaque de blindage du côté qu'il regarde (le dos est le point faible)
 			var fx := ep.x + float(e["dir"]) * eh.x - (3.0 if float(e["dir"]) > 0.0 else 0.0)
 			draw_rect(Rect2(fx, ep.y - eh.y, 3.0, eh.y * 2.0), Color(0.22, 0.24, 0.30))
-	# PNJ du Foyer
+		if not (e.get("carry", {}) as Dictionary).is_empty():
+			# Porteur de raid chargé : le sac de butin sur le dos
+			var bx := ep.x - float(e["dir"]) * (eh.x + 2.0) - 2.5
+			draw_rect(Rect2(bx, ep.y - eh.y + 2.0, 5.0, 6.0), Color(0.75, 0.62, 0.25))
+	# PNJ du Foyer (un blessé est couché au sol)
 	for npc in pop.npcs:
 		var np: Vector2 = npc["pos"]
+		if bool(npc.get("down", false)):
+			var lying := Rect2(np + Vector2(-Population.NPC_HALF.y, Population.NPC_HALF.y - 8.0),
+				Vector2(Population.NPC_HALF.y * 2.0, 8.0))
+			draw_rect(lying, Color(0.55, 0.55, 0.62))
+			draw_rect(lying, Color(0.6, 0.15, 0.15, 0.8), false, 1.0)
+			continue
 		draw_rect(Rect2(np - Population.NPC_HALF, Population.NPC_HALF * 2.0), Color(0.62, 0.78, 0.92))
 		draw_rect(Rect2(np - Population.NPC_HALF, Population.NPC_HALF * 2.0), Color(0, 0, 0, 0.5), false, 1.0)
 	# Légendaires captifs (dorés — leur lueur vient de lights.gd)
