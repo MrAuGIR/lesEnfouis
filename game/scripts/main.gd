@@ -10,11 +10,11 @@ const DIG_TIME := 0.28           # s pour creuser 1 bloc de terre (le nerf du ga
 const REACH := 3.5 * WorldGrid.TILE   # portée de creusage autour du héros
 const DIG_TIERS := [1.0, 0.65, 0.45]  # mult. de temps (Pierre→Fer→Acier)
 const TIER_NAMES := ["Pierre", "Fer", "Acier"]
-# Paliers d'outil (M3) : l'outil FER se forge avec les ressources du Transit
-# (fer miné + ferraille fouillée) — c'est lui qui ouvre la barrière de roche dense.
+# Paliers d'outil (M3) : forgés à partir du Fer (récupéré au combat / fouille /
+# Mine de fer). L'outil n'ouvre plus la barrière (M5) mais accélère le creusage.
 const UPGRADE_COST := [{},
-	{WorldGrid.IRON: 6, Inventory.FERRAILLE: 4, WorldGrid.WOOD: 4},
-	{WorldGrid.IRON: 14, Inventory.FERRAILLE: 10, WorldGrid.LITHIUM: 8}]
+	{WorldGrid.IRON: 10, WorldGrid.WOOD: 4},
+	{WorldGrid.IRON: 20, WorldGrid.LITHIUM: 8}]
 const COST_ANTIPOL := {WorldGrid.LITHIUM: 5, WorldGrid.WOOD: 3}  # cartouche anti-gaz (atelier)
 const LADDER_MAX := 10           # longueur max d'une pose d'échelle (tuiles, 1 bois/tuile)
 const CACHE_RANGE := 2.0 * WorldGrid.TILE  # portée de récupération d'une cache
@@ -139,7 +139,10 @@ func _ready() -> void:
 	room_ui.foyer = foyer
 	room_ui.pop = pop
 	room_ui.hud = hud
+	room_ui.bag = bag
 	room_ui.on_choose = _start_placement
+	room_ui.on_deposit = _deposit
+	room_ui.on_withdraw = _withdraw_one
 	_setup_screen(room_ui)
 	trade_ui = TradeUI.new()
 	trade_ui.foyer = foyer
@@ -166,7 +169,9 @@ func _physics_process(delta: float) -> void:
 		crew.update(delta)   # un écran ouvert fige le jeu (héros ET robots)
 		for m in boss.update(delta):
 			hud.flash(m)
-		raids.hold = boss.fighting()   # pas de compte à rebours de raid pendant le boss
+		# Compte à rebours de raid gelé pendant le combat de boss ET pendant le passage
+		# de la caravane (M6 : plus de raid qui tombe en plein troc).
+		raids.hold = boss.fighting() or caravan.present
 		for m in raids.update(delta):
 			hud.flash(m)
 	if hero.hp <= 0.0:
@@ -205,6 +210,8 @@ func _process(delta: float) -> void:
 	marker.cache_active = cache_active
 	marker.cache_pos = cache_pos
 	marker.loot_cell = _find_crate() if not _ui_open() else Vector2i(-1, -1)
+	# Coffre vidé recyclable : seulement si aucun coffre plein n'est à portée (priorité fouille).
+	marker.recycle_cell = _find_near_tile(WorldGrid.CRATE_OPEN) if (not _ui_open() and marker.loot_cell.x < 0) else Vector2i(-1, -1)
 	marker.tick(delta)
 	view.tick(delta)
 	if inv_open:
@@ -244,9 +251,6 @@ func _input(event: InputEvent) -> void:
 		elif event.keycode == KEY_I or event.physical_keycode == KEY_I:
 			if not panel_open:
 				_toggle_inventory()
-		elif event.keycode == KEY_Q:
-			if not _ui_open():
-				_withdraw()
 		elif event.keycode == KEY_R:
 			if not _ui_open():
 				_refuel()
@@ -404,11 +408,15 @@ func _interact() -> void:
 	if lc.x >= 0:
 		_loot_crate(lc)
 		return
+	var rc := _find_near_tile(WorldGrid.CRATE_OPEN)
+	if rc.x >= 0:
+		_recycle_crate(rc)
+		return
 	var rk = foyer.room_key_at(hero.pos)
 	if rk == null:
 		return
 	var room := int(foyer.rooms[rk]["type"])
-	if room == Foyer.ROOM_PROD or room == Foyer.ROOM_DEFENSE:
+	if room == Foyer.ROOM_FORAGE or room == Foyer.ROOM_MINE or room == Foyer.ROOM_DEFENSE:
 		room_ui.open_assign(Vector2i(rk))
 	elif room == Foyer.ROOM_INFIRMERIE:
 		hud.flash("Infirmerie : %d blesse(s) au Foyer (%d lit(s) de soin par infirmerie)" % \
@@ -423,7 +431,7 @@ func _interact() -> void:
 		else:
 			hud.flash("Atelier : outil au maximum   [4] cartouche anti-gaz (5 Li + 3 bois)")
 	else:
-		_deposit()   # hall et entrepôt : dépôt rapide du sac
+		room_ui.open_stock(Vector2i(rk))   # hall et entrepôt : panneau dépôt / retrait
 
 # La charge de perçage du Roi (M5) : [E] juste SOUS la barrière → un puits
 # d'échelles s'ouvre à travers la roche dense, la voie de la surface est libre.
@@ -461,15 +469,21 @@ func _deposit() -> void:
 	else:
 		hud.flash("Sac vide : rien a deposer")
 
-func _withdraw() -> void:
-	# Stock → sac : raccourci pratique (priorité au carburant, puis bois/roche/terre),
-	# dans la limite des slots libres. Le réglage fin se fait à l'inventaire (touche I).
-	if not foyer.inside(hero.pos):
+func _withdraw_one(t: int) -> void:
+	# Stock → sac : retire toute la ressource demandée, dans la limite des slots libres.
+	# Appelé par le panneau Stock (room_ui) — plus de touche dédiée (conflit AZERTY [Q]).
+	var have := foyer.count(t)
+	if have <= 0:
+		hud.flash("Aucune %s en stock" % Inventory.res_name(t))
 		return
-	for t in [WorldGrid.LITHIUM, WorldGrid.WOOD, WorldGrid.IRON, Inventory.FERRAILLE,
-			WorldGrid.ROCK, WorldGrid.DIRT]:
-		var moved := bag.add(t, foyer.count(t))
-		foyer.remove(t, moved)
+	var moved := bag.add(t, have)
+	foyer.remove(t, moved)
+	if moved <= 0:
+		hud.flash("Sac plein : impossible de retirer")
+	elif moved < have:
+		hud.flash("Retire %d %s (sac plein : %d restent en stock)" % [moved, Inventory.res_name(t), have - moved])
+	else:
+		hud.flash("Retire %d %s du stock" % [moved, Inventory.res_name(t)])
 
 func _recover_cache() -> void:
 	for t in cache:
@@ -485,11 +499,14 @@ func _captive_near() -> int:
 	return -1
 
 func _find_crate() -> Vector2i:
+	return _find_near_tile(WorldGrid.CRATE)
+
+func _find_near_tile(t: int) -> Vector2i:
 	var hx := int(hero.pos.x / WorldGrid.TILE)
 	var hy := int(hero.pos.y / WorldGrid.TILE)
 	for dy in range(-1, 3):
 		for dx in range(-2, 3):
-			if world.tile(hx + dx, hy + dy) == WorldGrid.CRATE:
+			if world.tile(hx + dx, hy + dy) == t:
 				return Vector2i(hx + dx, hy + dy)
 	return Vector2i(-1, -1)
 
@@ -499,19 +516,36 @@ func _loot_crate(cell: Vector2i) -> void:
 	marker.add_flash(cell, 0.2)
 	var roll := randf()
 	var msg: String
-	if roll < 0.30:
+	if roll < 0.35:
 		msg = _loot_to_bag(WorldGrid.WOOD, randi_range(2, 4))
-	elif roll < 0.60:
-		msg = _loot_to_bag(Inventory.FERRAILLE, randi_range(2, 4))
-	elif roll < 0.75:
-		msg = _loot_to_bag(Inventory.RATIONS, randi_range(1, 2))
-	elif roll < 0.90:
+	elif roll < 0.65:
+		msg = _loot_to_bag(WorldGrid.IRON, randi_range(2, 4))
+	elif roll < 0.85:
 		var n := randi_range(4, 8)
 		combat.ammo += n
 		msg = "+%d munitions" % n
 	else:
 		msg = _loot_to_bag(WorldGrid.LITHIUM, randi_range(2, 3))
+	# Bonus bois : une planche ou deux de récup en plus du loot principal — le bois
+	# est le goulot de la construction (M6), on le rend un peu plus présent.
+	if randf() < 0.35:
+		var w := randi_range(1, 2)
+		bag.add(WorldGrid.WOOD, w)
+		msg += "  (+%d bois)" % w
 	hud.flash("Fouille : %s" % msg)
+
+# Recyclage d'un conteneur déjà fouillé (M6) : [E] le démantèle pour son bois,
+# une seule fois (la caisse disparaît du décor).
+func _recycle_crate(cell: Vector2i) -> void:
+	world.set_tile(cell.x, cell.y, WorldGrid.EMPTY)
+	view.mark_dirty()
+	marker.add_flash(cell, 0.2)
+	var w := randi_range(1, 2)
+	var got := bag.add(WorldGrid.WOOD, w)
+	if got > 0:
+		hud.flash("Caisse demantelee : +%d bois" % got)
+	else:
+		hud.flash("Caisse demantelee, mais ton sac est plein !")
 
 func _loot_to_bag(t: int, n: int) -> String:
 	var got := bag.add(t, n)
@@ -690,22 +724,22 @@ func _update_hud() -> void:
 	var npc_status := "%d/%d" % [pop.npcs.size(), foyer.dortoir_capacity()]
 	if pop.down_count() > 0:
 		npc_status += " (%d blesse(s))" % pop.down_count()
-	var foyer_line := "Foyer  - Dortoir:%d  Prod:%d  Atelier:%d  Entrepot:%d    PNJ: %s    Caravane: %s    |    %s" % [
-		foyer.room_count(Foyer.ROOM_DORTOIR), foyer.room_count(Foyer.ROOM_PROD),
+	var foyer_line := "Foyer  - Dortoir:%d  Forage:%d  Mine:%d  Atelier:%d  Entrepot:%d    PNJ: %s    Caravane: %s    |    %s" % [
+		foyer.room_count(Foyer.ROOM_DORTOIR), foyer.room_count(Foyer.ROOM_FORAGE),
+		foyer.room_count(Foyer.ROOM_MINE),
 		foyer.room_count(Foyer.ROOM_ATELIER), foyer.room_count(Foyer.ROOM_ENTREPOT),
 		npc_status, car_status, raids.status_text()]
-	var hint := "[ZQSD/Fleches] bouger  [Espace] saut  [Clic G] creuser  [Clic D] attaquer  [X] arme  [I] inventaire  [B] construire  [F] echelle  [G] passerelle  [R] lampe  [T] torche  [M] anti-gaz  [E] agir  [Q] retirer  [K] mort"
+	var hint := "[ZQSD/Fleches] bouger  [Espace] saut  [Clic G] creuser  [Clic D] attaquer  [X] arme  [I] inventaire  [B] construire  [F] echelle  [G] passerelle  [R] lampe  [T] torche  [M] anti-gaz  [E] agir  [K] mort"
 	if placing >= 0:
 		hint = "PLACEMENT : %s >  clique un slot vert (colle a une piece, une echelle ou une passerelle)   [B]/[Echap]/clic droit : annuler" % Foyer.ROOM_NAMES[placing]
 	elif foyer.inside(hero.pos):
-		hint = "FOYER >  [B] construire une piece   [E] agir ici : prod=affecter PNJ · dortoir=repos · hall/entrepot=depot · caravane=troc   [Q] retirer du stock   [3]/[4] atelier"
-	hud.set_stats("%s\nPV: %d/%d    %s\nSac    - Li:%d  Bois:%d  Terre:%d  Roche:%d  Fer:%d  Ferraille:%d\nStock  - Li:%d  Bois:%d  Terre:%d  Roche:%d  Fer:%d  Ferraille:%d  Rations:%d    (%d/%d)\n%s\nLampe: %d%%   Torches: %d   %s   |   %s   |   Outil: %s" % [
+		hint = "FOYER >  [B] construire   [E] agir ici : forage/mine=affecter PNJ · dortoir=repos · hall/entrepot=STOCK (deposer/retirer) · caravane=troc   [3]/[4] atelier"
+	hud.set_stats("%s\nPV: %d/%d    %s\nSac    - Li:%d  Bois:%d  Terre:%d  Roche:%d  Fer:%d\nStock  - Li:%d  Bois:%d  Terre:%d  Roche:%d  Fer:%d    (%d/%d)\n%s\nLampe: %d%%   Torches: %d   %s   |   %s   |   Outil: %s" % [
 		obj, int(hero.hp), int(Hero.MAX_HP), bagline,
 		bag.count(WorldGrid.LITHIUM), bag.count(WorldGrid.WOOD), bag.count(WorldGrid.DIRT), bag.count(WorldGrid.ROCK),
-		bag.count(WorldGrid.IRON), bag.count(Inventory.FERRAILLE),
+		bag.count(WorldGrid.IRON),
 		foyer.count(WorldGrid.LITHIUM), foyer.count(WorldGrid.WOOD), foyer.count(WorldGrid.DIRT), foyer.count(WorldGrid.ROCK),
-		foyer.count(WorldGrid.IRON), foyer.count(Inventory.FERRAILLE),
-		foyer.count(Inventory.RATIONS), foyer.stored_total(), foyer.capacity(),
+		foyer.count(WorldGrid.IRON), foyer.stored_total(), foyer.capacity(),
 		foyer_line,
 		int(hero.lamp_fuel / Hero.LAMP_AUTONOMY * 100.0), light.torches.size(), antigas, weap, TIER_NAMES[dig_level]])
 	hud.set_hints(hint)

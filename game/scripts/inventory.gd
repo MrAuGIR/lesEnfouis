@@ -6,19 +6,16 @@ extends RefCounted
 const BAG_SLOTS := 8             # nombre de cases du sac (la "capacité" = nb de slots)
 const STACK_MAX := 64            # taille d'une pile (objets identiques empilés)
 
-# Rations (M2) : produites au Foyer, ressource d'échange/troc — pas une tuile,
-# l'id 8 prolonge la numérotation des types de tuile de WorldGrid (LADDER = 7).
-const RATIONS := 8
-# Ferraille (M3) : fouillée dans les conteneurs du Transit / lâchée par les
-# pilleurs — pas une tuile non plus (l'id prolonge ceux de WorldGrid).
-const FERRAILLE := 13
+# M6 : la Ferraille a été fusionnée dans le Fer (IRON) et les Rations retirées
+# (pas de mécanique de faim au MVP). Le métal récupéré (fouille, pilleurs, Mine
+# de fer) est désormais du Fer ; il n'y a plus de ressource « hors tuile ».
 
 # Ressources transportables (ordre d'affichage dans l'inventaire / le stockage)
 const RES_TYPES := [WorldGrid.DIRT, WorldGrid.ROCK, WorldGrid.WOOD, WorldGrid.LITHIUM,
-	WorldGrid.IRON, FERRAILLE]
-# Ressources du stock du Foyer (RES_TYPES + ce qui n'est pas minable)
+	WorldGrid.IRON]
+# Ressources du stock du Foyer (identiques : tout est minable/transportable)
 const STORE_TYPES := [WorldGrid.DIRT, WorldGrid.ROCK, WorldGrid.WOOD, WorldGrid.LITHIUM,
-	WorldGrid.IRON, FERRAILLE, RATIONS]
+	WorldGrid.IRON]
 
 # Chaque slot est {} (vide) ou {"type": int, "count": int}.
 var slots := []
@@ -93,8 +90,6 @@ static func res_color(t: int) -> Color:
 		WorldGrid.WOOD: return Color(0.55, 0.38, 0.15)
 		WorldGrid.LITHIUM: return Color(0.45, 0.74, 0.80)
 		WorldGrid.IRON: return Color(0.66, 0.44, 0.32)
-		FERRAILLE: return Color(0.58, 0.58, 0.52)
-		RATIONS: return Color(0.58, 0.72, 0.34)
 	return Color(0.6, 0.6, 0.6)
 
 static func res_name(t: int) -> String:
@@ -104,6 +99,4 @@ static func res_name(t: int) -> String:
 		WorldGrid.WOOD: return "Bois"
 		WorldGrid.LITHIUM: return "Lithium"
 		WorldGrid.IRON: return "Fer"
-		FERRAILLE: return "Ferraille"
-		RATIONS: return "Rations"
 	return "?"

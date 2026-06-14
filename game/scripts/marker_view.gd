@@ -7,15 +7,16 @@ extends Node2D
 
 const ROOM_TINTS := [
 	Color(0.95, 0.75, 0.35, 0.10),   # dortoir
-	Color(0.45, 0.85, 0.45, 0.10),   # production (rations)
+	Color(0.55, 0.70, 0.45, 0.10),   # forage (roche)
 	Color(0.95, 0.55, 0.30, 0.10),   # atelier
 	Color(0.50, 0.65, 0.95, 0.10),   # entrepôt
 	Color(0.75, 0.85, 0.80, 0.07),   # hall
 	Color(0.95, 0.40, 0.40, 0.10),   # infirmerie
 	Color(0.60, 0.62, 0.70, 0.10),   # bunker-défense
+	Color(0.72, 0.52, 0.40, 0.10),   # mine de fer
 ]
-const ROOM_LABELS := ["DORTOIR", "PROD. RATIONS", "ATELIER", "ENTREPOT", "HALL",
-	"INFIRMERIE", "BUNKER-DEF."]
+const ROOM_LABELS := ["DORTOIR", "FORAGE", "ATELIER", "ENTREPOT", "HALL",
+	"INFIRMERIE", "BUNKER-DEF.", "MINE DE FER"]
 
 var world: WorldGrid
 var hero: Hero
@@ -37,6 +38,7 @@ var cache_range := 2.0 * WorldGrid.TILE
 var build_room := -1              # mode placement : type de pièce en cours (-1 = aucun)
 var build_slots := []             # mode placement : slots valides (Array de Rect2, px monde)
 var loot_cell := Vector2i(-1, -1) # conteneur fouillable à portée ([E]), -1 sinon
+var recycle_cell := Vector2i(-1, -1) # conteneur vidé recyclable en bois ([E]), -1 sinon
 
 func _light_passes(tx: int, ty: int) -> bool:
 	var t := world.tile(tx, ty)
@@ -153,6 +155,10 @@ func _draw() -> void:
 		draw_rect(Rect2(loot_cell.x * ts, loot_cell.y * ts, ts, ts), Color(1.0, 0.9, 0.5, 0.8), false, 1.0)
 		draw_string(font, Vector2(loot_cell.x * ts - 8, loot_cell.y * ts - 4), "[E] FOUILLER",
 			HORIZONTAL_ALIGNMENT_LEFT, -1, 7, Color(1.0, 0.9, 0.5))
+	if recycle_cell.x >= 0:
+		draw_rect(Rect2(recycle_cell.x * ts, recycle_cell.y * ts, ts, ts), Color(0.6, 0.85, 0.55, 0.7), false, 1.0)
+		draw_string(font, Vector2(recycle_cell.x * ts - 8, recycle_cell.y * ts - 4), "[E] RECYCLER",
+			HORIZONTAL_ALIGNMENT_LEFT, -1, 7, Color(0.65, 0.9, 0.6))
 	# Butin de raid tombé au sol (porteur abattu) : ramassage auto au contact
 	if raids != null:
 		for dr in raids.drops:

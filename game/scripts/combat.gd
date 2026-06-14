@@ -14,12 +14,12 @@ const GUN_DMG := 40.0            # ~2 balles pour détruire un robot
 const GUN_RANGE := 14.0 * WorldGrid.TILE   # portée du tir
 const GUN_CD := 0.5              # s entre deux tirs
 const GUN_TRACER_T := 0.08       # s d'affichage du traceur
-const START_AMMO := 24           # munitions de départ — CONFORT DE TEST (à remettre à 0/qqs, M6)
+const START_AMMO := 8            # munitions de départ (le reste se fouille / se troque)
 const ENEMY_LOOT := 3            # lithium (batteries) lâché à la mort d'un robot
 const ENEMY_AMMO_DROP := 2       # munitions lâchées par un robot (avec une probabilité)
 const ENEMY_AMMO_CHANCE := 0.6   # probabilité qu'un robot lâche des munitions
-const PILLEUR_LOOT := 2          # ferraille lâchée par un pilleur/tireur
-const LOURD_LOOT := 6            # ferraille du Lourd (carcasse blindée)
+const PILLEUR_LOOT := 2          # fer (récup) lâché par un pilleur/tireur
+const LOURD_LOOT := 6            # fer du Lourd (carcasse blindée)
 const LOURD_AMMO := 6            # munitions garanties sur le Lourd
 
 var hero: Hero
@@ -136,12 +136,12 @@ func _cull() -> void:
 			if randf() < ENEMY_AMMO_CHANCE:
 				got_ammo = ENEMY_AMMO_DROP
 		elif kind == EnemyCrew.KIND_LOURD:
-			bag.add(Inventory.FERRAILLE, LOURD_LOOT)
-			lootmsg = "+%d ferraille" % LOURD_LOOT
+			bag.add(WorldGrid.IRON, LOURD_LOOT)
+			lootmsg = "+%d fer" % LOURD_LOOT
 			got_ammo = LOURD_AMMO
 		else:
-			bag.add(Inventory.FERRAILLE, PILLEUR_LOOT)
-			lootmsg = "+%d ferraille" % PILLEUR_LOOT
+			bag.add(WorldGrid.IRON, PILLEUR_LOOT)
+			lootmsg = "+%d fer" % PILLEUR_LOOT
 			if randf() < 0.5:
 				got_ammo = ENEMY_AMMO_DROP
 		ammo += got_ammo

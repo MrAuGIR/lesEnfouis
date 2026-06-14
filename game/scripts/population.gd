@@ -2,10 +2,9 @@ class_name Population
 extends RefCounted
 ## Les PNJ du Foyer : arrivée automatique (tant que le dortoir a des lits libres),
 ## identité (nom + stats), affectation aux pièces et petite vie de fourmilière
-## (déambulation grey-box, sans physique). Pas de besoins en M2 — décision de
-## design : les rations sont une ressource d'échange, pas de survie.
+## (déambulation grey-box, sans physique). Pas de besoins de survie au MVP.
 
-const ARRIVAL_INTERVAL := 45.0   # s entre deux arrivées — CONFORT DE TEST (M6)
+const ARRIVAL_INTERVAL := 75.0   # s entre deux arrivées de survivants
 const WALK_SPEED := 26.0
 const NPC_HALF := Vector2(5, 11)
 # Blessures (M4) : à 0 PV un PNJ tombe BLESSÉ (inactif), jamais de mort définitive

@@ -4,7 +4,7 @@ extends RefCounted
 ## moment puis repart. Commerce en TROC : ressource contre ressource, depuis le
 ## stock du Foyer (les munitions vont directement à l'arme — cf. main.gd).
 
-const FIRST_DELAY := 40.0        # premier passage rapide — CONFORT DE TEST (M6)
+const FIRST_DELAY := 180.0       # s avant le premier passage de la caravane
 const PERIOD := 150.0            # s entre deux passages
 const STAY := 60.0               # s de présence au Foyer
 const TRADE_RANGE := 2.5 * WorldGrid.TILE
@@ -14,7 +14,7 @@ const OFFERS: Array = [
 	{"give": {WorldGrid.ROCK: 12}, "get": {WorldGrid.LITHIUM: 4}},
 	{"give": {WorldGrid.DIRT: 30}, "get": {WorldGrid.WOOD: 6}},
 	{"give": {WorldGrid.WOOD: 10}, "get": {AMMO: 8}},
-	{"give": {Inventory.RATIONS: 8}, "get": {WorldGrid.LITHIUM: 6}},
+	{"give": {WorldGrid.IRON: 10}, "get": {WorldGrid.LITHIUM: 6}},
 	{"give": {WorldGrid.LITHIUM: 12}, "get": {AMMO: 20}},
 ]
 

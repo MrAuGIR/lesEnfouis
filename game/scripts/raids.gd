@@ -13,8 +13,8 @@ extends RefCounted
 ## Les assaillants vivent dans crew.list (combat et rendu inchangés) mais sont
 ## pilotés ici, en cinématique le long de leur chemin (flag "raid").
 
-const RAID_GRACE := 150.0    # s avant le 1er raid — CONFORT DE TEST (M6)
-const RAID_PERIOD := 150.0   # s entre deux raids — CONFORT DE TEST (M6)
+const RAID_GRACE := 240.0    # s avant le 1er raid (laisse le temps d'établir le Foyer)
+const RAID_PERIOD := 210.0   # s entre deux raids (espacé : retours playtest M6)
 const ALERT_TIME := 60.0     # s d'alerte avant l'assaut (le temps de rentrer)
 const RETRY_TIME := 45.0     # s avant de retester quand aucun chemin n'existe
 const WAVE_BASE := 3         # taille de la 1re vague…
@@ -29,7 +29,7 @@ const DEF_RANGE := 12.0      # tuiles : portée de tir du bunker-défense
 const DEF_CD := 1.4          # s entre deux tirs d'un garde posté
 const DEF_DMG_BASE := 4.0    # dégâts d'un tir = base + Garde * bonus
 const DEF_DMG_GARDE := 4.0
-const DEF_SCRAP := 2         # ferraille récupérée par les gardes sur leurs victimes
+const DEF_SCRAP := 2         # fer (récup) récupéré par les gardes sur leurs victimes
 const PICKUP_RANGE := 1.5    # tuiles : ramassage auto du butin tombé
 const BFS_LIMIT := 24000     # garde-fou du pathfinding
 
@@ -165,7 +165,7 @@ func _run_raiders(delta: float, msgs: Array) -> void:
 			continue
 		if float(e["hp"]) <= 0.0:   # abattu par le bunker-défense (le héros passe par combat)
 			_drop_carry(e)
-			foyer.add(Inventory.FERRAILLE, DEF_SCRAP)   # les gardes récupèrent la ferraille
+			foyer.add(WorldGrid.IRON, DEF_SCRAP)   # les gardes récupèrent le fer sur la carcasse
 			msgs.append("Un assaillant abattu par la garde du Foyer !")
 			continue
 		e["hit_cd"] = maxf(0.0, float(e["hit_cd"]) - delta)

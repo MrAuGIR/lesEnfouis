@@ -11,11 +11,15 @@ const PANEL_W := 480.0
 const ROW_H := 34.0
 const MODE_BUILD := 0
 const MODE_ASSIGN := 1
+const MODE_STOCK := 2
 
 var foyer: Foyer
 var pop: Population
 var hud: Hud
-var on_choose: Callable   # appelé avec le type de pièce choisi (menu construction)
+var bag: Inventory
+var on_choose: Callable    # appelé avec le type de pièce choisi (menu construction)
+var on_deposit: Callable   # panneau stock : déposer tout le sac
+var on_withdraw: Callable  # panneau stock : retirer une ressource (type int)
 
 var mode := MODE_BUILD
 var room_mp := Vector2i.ZERO   # pièce en cours (mode affectation)
@@ -29,6 +33,13 @@ func open_build() -> void:
 
 func open_assign(mp: Vector2i) -> void:
 	mode = MODE_ASSIGN
+	room_mp = mp
+	picking = false
+	visible = true
+	queue_redraw()
+
+func open_stock(mp: Vector2i) -> void:
+	mode = MODE_STOCK
 	room_mp = mp
 	picking = false
 	visible = true
@@ -49,6 +60,8 @@ func _room_type() -> int:
 func _row_count() -> int:
 	if mode == MODE_BUILD:
 		return Foyer.BUILDABLE.size()
+	if mode == MODE_STOCK:
+		return 1 + Inventory.STORE_TYPES.size()   # ligne « déposer » + une par ressource
 	var n: int = Foyer.ROOM_SLOTS[_room_type()]
 	if picking:
 		n += 1 + pop.npcs.size()   # ligne d'en-tête + un PNJ par ligne
@@ -76,9 +89,14 @@ func _draw() -> void:
 		var slots: int = Foyer.ROOM_SLOTS[_room_type()]
 		title = "%s — postes %d/%d" % [String(Foyer.ROOM_NAMES[_room_type()]).to_upper(),
 			pop.assigned_to(room_mp).size(), slots]
+	elif mode == MODE_STOCK:
+		title = "STOCK DU FOYER — %d/%d   (clic : deposer le sac ou retirer une ressource)" % \
+			[foyer.stored_total(), foyer.capacity()]
 	draw_string(font, p.position + Vector2(14, 26), title, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(0.92, 0.95, 0.85))
 	if mode == MODE_BUILD:
 		_draw_build(font)
+	elif mode == MODE_STOCK:
+		_draw_stock(font)
 	else:
 		_draw_assign(font)
 	var foot := "[B] / [E] / [Echap] fermer" if mode == MODE_BUILD else "[E] / [Echap] fermer"
@@ -131,6 +149,27 @@ func _draw_assign(font: Font) -> void:
 			draw_string(font, r.position + Vector2(8, 19), "%s    Travail %d / Garde %d    [%s]" % \
 				[npc["name"], int(npc["travail"]), int(npc["garde"]), where], HORIZONTAL_ALIGNMENT_LEFT, -1, 12, col)
 
+func _draw_stock(font: Font) -> void:
+	# Ligne 0 : déposer tout le sac.
+	var dr := _row_rect(0)
+	var carried := bag.total() if bag != null else 0
+	draw_rect(dr, Color(0.16, 0.22, 0.18, 0.9))
+	draw_rect(dr, Color(0.45, 0.6, 0.48, 0.85), false, 1.0)
+	var dcol := Color(0.8, 0.95, 0.8) if carried > 0 else Color(0.55, 0.6, 0.55)
+	draw_string(font, dr.position + Vector2(8, 19), "DEPOSER tout le sac  (%d objet(s))   [clic]" % carried,
+		HORIZONTAL_ALIGNMENT_LEFT, -1, 12, dcol)
+	# Lignes suivantes : une par ressource stockable → retirer.
+	for i in Inventory.STORE_TYPES.size():
+		var t: int = Inventory.STORE_TYPES[i]
+		var r := _row_rect(1 + i)
+		var have := foyer.count(t)
+		draw_rect(r, Color(0.16, 0.18, 0.22, 0.9))
+		draw_rect(r, Color(0.45, 0.48, 0.54, 0.8), false, 1.0)
+		var col := Color(0.92, 0.94, 0.96) if have > 0 else Color(0.5, 0.52, 0.56)
+		var act := "   [clic : retirer]" if have > 0 else ""
+		draw_string(font, r.position + Vector2(8, 19), "%s :  %d en stock%s" % [Inventory.res_name(t), have, act],
+			HORIZONTAL_ALIGNMENT_LEFT, -1, 12, col)
+
 func _cost_text(cost: Dictionary) -> String:
 	var parts := []
 	for t in cost:
@@ -143,6 +182,18 @@ func _click(p: Vector2) -> void:
 		for i in Foyer.BUILDABLE.size():
 			if _row_rect(i).has_point(p):
 				_click_build(int(Foyer.BUILDABLE[i]))
+				return
+	elif mode == MODE_STOCK:
+		if _row_rect(0).has_point(p):
+			if on_deposit.is_valid():
+				on_deposit.call()
+			queue_redraw()
+			return
+		for i in Inventory.STORE_TYPES.size():
+			if _row_rect(1 + i).has_point(p):
+				if on_withdraw.is_valid():
+					on_withdraw.call(int(Inventory.STORE_TYPES[i]))
+				queue_redraw()
 				return
 	else:
 		var slots: int = Foyer.ROOM_SLOTS[_room_type()]
