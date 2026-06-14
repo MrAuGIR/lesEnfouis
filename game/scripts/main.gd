@@ -702,44 +702,97 @@ func _in_reach(tx: int, ty: int) -> bool:
 
 # --- HUD ----------------------------------------------------------------------
 func _update_hud() -> void:
-	var bagline := "Sac: %d/%d slots" % [bag.slots_used(), Inventory.BAG_SLOTS]
-	if bag.slots_used() >= Inventory.BAG_SLOTS:
-		bagline += "  (PLEIN)"
-	if cache_active:
-		bagline += "     >> CACHE a recuperer <<"
-	var obj := "Objectif: vaincre le ROI DES GALERIES (terminal scelle au bout du tunnel inferieur)"
+	# Objectif (haut-centre)
+	var obj := "Objectif : vaincre le ROI DES GALERIES (terminal scelle au bout du tunnel inferieur)"
 	if won:
 		obj = "*** FIN DU MVP : tu as rejoint la surface ! ***"
 	elif pierced:
-		obj = "Objectif: REMONTE par le puits perce dans la barriere, jusqu'a la SURFACE !"
+		obj = "Objectif : REMONTE par le puits perce dans la barriere, jusqu'a la SURFACE !"
 	elif boss.charge_taken:
-		obj = "Objectif: pose la CHARGE DE PERCAGE juste sous la barriere ([E]) puis remonte"
+		obj = "Objectif : pose la CHARGE DE PERCAGE juste sous la barriere puis remonte"
 	elif boss.state == BossFight.ST_DEAD:
-		obj = "Objectif: ramasse la CHARGE DE PERCAGE dans le terminal du Roi"
-	if not won and hero.in_gas():
-		obj += ("   [GAZ: protege]" if (hero.antipol_on and hero.antipol_fuel > 0.0) else "   !! GAZ TOXIQUE : -PV !!")
-	var weap := "Arme: melee" if combat.weapon == 0 else "Arme: feu (%d mun.)" % combat.ammo
-	var antigas := "Anti-gaz: %s (%d)" % ["ON" if hero.antipol_on else "off", hero.antipol_charges()]
-	var car_status := "ICI ! (%d s)" % maxi(0, int(caravan.stay_t)) if caravan.present else "dans %d s" % maxi(0, int(caravan.timer))
+		obj = "Objectif : ramasse la CHARGE DE PERCAGE dans le terminal du Roi"
+
+	# Bandeau d'alerte (haut-centre, pulsé) : priorité au gaz, sinon raid en cours/imminent
+	var alert := {"text": "", "danger": false}
+	if not won and hero.in_gas() and not (hero.antipol_on and hero.antipol_fuel > 0.0):
+		alert = {"text": "!! GAZ TOXIQUE — active l'anti-gaz [M] !!", "danger": true}
+	elif raids.state == Raids.ST_ALERT or raids.state == Raids.ST_ACTIVE:
+		alert = {"text": raids.status_text(), "danger": true}
+
+	# État du monde (haut-gauche)
+	var car_status := "ICI (%d s)" % maxi(0, int(caravan.stay_t)) if caravan.present else "dans %d s" % maxi(0, int(caravan.timer))
 	var npc_status := "%d/%d" % [pop.npcs.size(), foyer.dortoir_capacity()]
 	if pop.down_count() > 0:
-		npc_status += " (%d blesse(s))" % pop.down_count()
-	var foyer_line := "Foyer  - Dortoir:%d  Forage:%d  Mine:%d  Atelier:%d  Entrepot:%d    PNJ: %s    Caravane: %s    |    %s" % [
-		foyer.room_count(Foyer.ROOM_DORTOIR), foyer.room_count(Foyer.ROOM_FORAGE),
-		foyer.room_count(Foyer.ROOM_MINE),
-		foyer.room_count(Foyer.ROOM_ATELIER), foyer.room_count(Foyer.ROOM_ENTREPOT),
-		npc_status, car_status, raids.status_text()]
-	var hint := "[ZQSD/Fleches] bouger  [Espace] saut  [Clic G] creuser  [Clic D] attaquer  [X] arme  [I] inventaire  [B] construire  [F] echelle  [G] passerelle  [R] lampe  [T] torche  [M] anti-gaz  [E] agir  [K] mort"
+		npc_status += " · %d blesse(s)" % pop.down_count()
+	var world_lines := [
+		"Raid : %s" % raids.status_text(),
+		"Caravane : %s" % car_status,
+		"PNJ : %s" % npc_status,
+	]
+
+	# Sac / Stock (droite) — comptes par ressource
+	var bagc := {}
+	for t in Inventory.RES_TYPES:
+		bagc[t] = bag.count(int(t))
+	var stockc := {}
+	for t in Inventory.STORE_TYPES:
+		stockc[t] = foyer.count(int(t))
+	var bag_slots := "%d/%d" % [bag.slots_used(), Inventory.BAG_SLOTS]
+	if bag.slots_used() >= Inventory.BAG_SLOTS:
+		bag_slots += " PLEIN"
+
+	# Équipement (bas-gauche)
+	var weap := "Arme melee" if combat.weapon == 0 else "Arme feu (%d)" % combat.ammo
+	var antigas := "ON(%d)" % hero.antipol_charges() if hero.antipol_on else "off"
+	var gear := "%s · Anti-gaz %s · Outil %s · Torches %d" % [weap, antigas, TIER_NAMES[dig_level], light.torches.size()]
+
+	var controls := "[ZQSD] bouger   [Espace] saut   [ClicG] creuser   [ClicD] tir   [X] arme   [I] sac   [B] construire   [F]/[G] echelle/passerelle   [R] lampe   [T] torche   [M] anti-gaz   [E] agir"
+
+	hud.set_state({
+		"objectif": obj,
+		"alert": alert,
+		"world": world_lines,
+		"bag": bagc, "bag_slots": bag_slots,
+		"stock": stockc, "stored": foyer.stored_total(), "cap": foyer.capacity(),
+		"hp": hero.hp, "hp_max": Hero.MAX_HP,
+		"lamp": hero.lamp_fuel / Hero.LAMP_AUTONOMY,
+		"gear": gear,
+		"context": _context_prompt(),
+		"controls": controls,
+	})
+
+# Invite contextuelle (« où agir ») : l'action la plus pertinente à la position du héros.
+func _context_prompt() -> String:
 	if placing >= 0:
-		hint = "PLACEMENT : %s >  clique un slot vert (colle a une piece, une echelle ou une passerelle)   [B]/[Echap]/clic droit : annuler" % Foyer.ROOM_NAMES[placing]
-	elif foyer.inside(hero.pos):
-		hint = "FOYER >  [B] construire   [E] agir ici : forage/mine=affecter PNJ · dortoir=repos · hall/entrepot=STOCK (deposer/retirer) · caravane=troc   [3]/[4] atelier"
-	hud.set_stats("%s\nPV: %d/%d    %s\nSac    - Li:%d  Bois:%d  Terre:%d  Roche:%d  Fer:%d\nStock  - Li:%d  Bois:%d  Terre:%d  Roche:%d  Fer:%d    (%d/%d)\n%s\nLampe: %d%%   Torches: %d   %s   |   %s   |   Outil: %s" % [
-		obj, int(hero.hp), int(Hero.MAX_HP), bagline,
-		bag.count(WorldGrid.LITHIUM), bag.count(WorldGrid.WOOD), bag.count(WorldGrid.DIRT), bag.count(WorldGrid.ROCK),
-		bag.count(WorldGrid.IRON),
-		foyer.count(WorldGrid.LITHIUM), foyer.count(WorldGrid.WOOD), foyer.count(WorldGrid.DIRT), foyer.count(WorldGrid.ROCK),
-		foyer.count(WorldGrid.IRON), foyer.stored_total(), foyer.capacity(),
-		foyer_line,
-		int(hero.lamp_fuel / Hero.LAMP_AUTONOMY * 100.0), light.torches.size(), antigas, weap, TIER_NAMES[dig_level]])
-	hud.set_hints(hint)
+		return "Clic gauche : poser %s sur un slot vert   ·   clic droit / [B] / [Echap] : annuler" % Foyer.ROOM_NAMES[placing]
+	if caravan.near(hero.pos):
+		return "[E] Troquer avec la caravane"
+	if cache_active and hero.pos.distance_to(cache_pos) <= CACHE_RANGE:
+		return "[E] Recuperer la cache"
+	if boss.door_near(hero.pos):
+		return "[E] Ouvrir l'antre du Roi (la porte se referme derriere toi !)"
+	if boss.charge_taken and not pierced:
+		return "[E] Poser la charge de percage (juste sous la barriere)"
+	if _captive_near() >= 0:
+		return "[E] Liberer le captif"
+	if marker.loot_cell.x >= 0:
+		return "[E] Fouiller la caisse"
+	if marker.recycle_cell.x >= 0:
+		return "[E] Recycler la caisse (bois)"
+	var rk = foyer.room_key_at(hero.pos)
+	if rk != null:
+		match int(foyer.rooms[rk]["type"]):
+			Foyer.ROOM_FORAGE, Foyer.ROOM_MINE, Foyer.ROOM_DEFENSE:
+				return "[E] Affecter des PNJ aux postes"
+			Foyer.ROOM_DORTOIR:
+				return "[E] Te reposer (PV au maximum)"
+			Foyer.ROOM_ATELIER:
+				return "[3] ameliorer l'outil   ·   [4] cartouche anti-gaz"
+			Foyer.ROOM_INFIRMERIE:
+				return "[E] Etat de l'infirmerie"
+			_:
+				return "[E] Stock : deposer le sac / retirer"
+	if foyer.inside(hero.pos):
+		return "[B] Construire une piece ici"
+	return ""
