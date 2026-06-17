@@ -34,6 +34,7 @@ var marker: MarkerView
 var lights: LightRig
 var camera: Camera2D
 var hud: Hud
+var audio: Audio
 var inv_ui: InvUI
 var room_ui: RoomUI
 var trade_ui: TradeUI
@@ -59,6 +60,13 @@ var cache := {}
 
 # Lueurs des légendaires captifs (index aligné sur pop.captives, éteintes à la libération)
 var captive_glows := []
+
+# Détection de transitions pour les alertes audio (on sonne au passage du seuil,
+# pas en continu) : PV, gaz, lampe, état de raid au tick précédent.
+var _prev_hp := 0.0
+var _prev_gas := false
+var _prev_lamp := 1.0
+var _prev_raid := 0
 
 func _ready() -> void:
 	randomize()
@@ -115,7 +123,10 @@ func _ready() -> void:
 	hud = Hud.new()
 	hud.layer = 2   # au-dessus du calque des marqueurs
 	add_child(hud)
+	audio = Audio.new()   # SFX (synthés placeholder) : gameplay, alertes, UI
+	add_child(audio)
 	combat = Combat.new(hero, world, crew, bag, hud, marker)
+	combat.audio = audio
 	marker.combat = combat
 	raids = Raids.new(world, foyer, pop, crew, hero, light, bag)
 	combat.raids = raids
@@ -149,7 +160,10 @@ func _ready() -> void:
 	trade_ui.caravan = caravan
 	trade_ui.combat = combat
 	trade_ui.hud = hud
+	trade_ui.audio = audio
 	_setup_screen(trade_ui)
+	_prev_hp = hero.hp
+	_prev_lamp = hero.lamp_fuel / Hero.LAMP_AUTONOMY
 	_update_hud()
 
 func _setup_screen(ui: Control) -> void:
@@ -157,6 +171,11 @@ func _setup_screen(ui: Control) -> void:
 	ui.mouse_filter = Control.MOUSE_FILTER_STOP
 	ui.visible = false
 	hud.add_child(ui)
+
+# Raccourci sûr (audio peut être absent en test headless).
+func _sfx(name: String, pitch := 1.0) -> void:
+	if audio != null:
+		audio.play(name, pitch)
 
 # Un écran est ouvert (inventaire, cellule, troc, fin) → fige héros/robots/armes/creusage.
 func _ui_open() -> bool:
@@ -204,6 +223,7 @@ func _process(delta: float) -> void:
 		if slots_t <= 0.0:   # connecteurs posés/cassés entre-temps → on rafraîchit
 			slots_t = 0.5
 			_refresh_slots()
+	_audio_alerts()
 	hud.tick(delta)
 	_update_hud()
 	lights.update()
@@ -239,6 +259,7 @@ func _input(event: InputEvent) -> void:
 				room_ui.close()
 			elif not _ui_open():
 				room_ui.open_build()
+				_sfx("ui_open")
 		elif event.keycode == KEY_G or event.physical_keycode == KEY_G:
 			if not _ui_open() and placing < 0:
 				_place_walkway()
@@ -280,6 +301,30 @@ func _input(event: InputEvent) -> void:
 				_stop_placement()
 		elif event.button_index == MOUSE_BUTTON_WHEEL_UP or event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
 			combat.swap_weapon()
+
+# Alertes audio : on sonne UNE FOIS au franchissement du seuil (pas en continu).
+# Chaque alerte a un timbre distinct (cf. audio.gd) — l'oreille double l'écran.
+func _audio_alerts() -> void:
+	# Héros touché : chute de PV nette d'un tick à l'autre (ignore l'érosion du gaz).
+	if hero.hp < _prev_hp - 2.0:
+		_sfx("hurt")
+	if hero.hp / Hero.MAX_HP < 0.30 and _prev_hp / Hero.MAX_HP >= 0.30:
+		_sfx("alert_lowhp")
+	_prev_hp = hero.hp
+	# Gaz : à l'entrée dans une zone non protégée.
+	var gas := hero.in_gas() and not (hero.antipol_on and hero.antipol_fuel > 0.0)
+	if gas and not _prev_gas:
+		_sfx("alert_gas")
+	_prev_gas = gas
+	# Lampe faible : au passage sous 15 %.
+	var lamp := hero.lamp_fuel / Hero.LAMP_AUTONOMY
+	if lamp < 0.15 and _prev_lamp >= 0.15:
+		_sfx("alert_lamp")
+	_prev_lamp = lamp
+	# Raid : à chaque escalade d'état (calme→imminent→en cours).
+	if raids.state > _prev_raid:
+		_sfx("alert_raid")
+	_prev_raid = raids.state
 
 func _update_aim() -> void:
 	var v := get_global_mouse_position() - hero.pos
@@ -327,6 +372,7 @@ func _start_placement(type: int) -> void:
 	placing = type
 	slots_t = 0.5
 	_refresh_slots()
+	_sfx("ui_click")
 	hud.flash("Placement : %s — clique un slot vert ([B]/clic droit : annuler)" % Foyer.ROOM_NAMES[type])
 
 func _stop_placement() -> void:
@@ -351,11 +397,13 @@ func _place_click(world_pos: Vector2) -> void:
 			continue
 		if not foyer.can_pay(Foyer.ROOM_COSTS[placing]):
 			hud.flash("Pas assez en stock pour : %s" % Foyer.ROOM_NAMES[placing])
+			_sfx("invalid")
 			return
 		foyer.place(mp, placing)
 		view.mark_dirty()
 		lights.add_room_light(_room_center(mp))
 		hud.flash("%s : construit ! (%s)" % [Foyer.ROOM_NAMES[placing], Foyer.ROOM_NOTES[placing]])
+		_sfx("build")
 		if not foyer.can_pay(Foyer.ROOM_COSTS[placing]):
 			_stop_placement()   # plus les moyens d'enchaîner
 		else:
@@ -378,6 +426,7 @@ func _place_walkway() -> void:
 	world.set_tile(tx, ty, WorldGrid.PASSERELLE)
 	view.mark_dirty()
 	marker.add_flash(Vector2i(tx, ty), 0.12)
+	_sfx("ui_click")
 
 func _room_center(mp: Vector2i) -> Vector2:
 	var ir := foyer.interior(mp)
@@ -388,6 +437,7 @@ func _interact() -> void:
 	if caravan.near(hero.pos):
 		trade_ui.visible = true
 		trade_ui.queue_redraw()
+		_sfx("ui_open")
 		return
 	if cache_active and hero.pos.distance_to(cache_pos) <= CACHE_RANGE:
 		_recover_cache()
@@ -418,6 +468,7 @@ func _interact() -> void:
 	var room := int(foyer.rooms[rk]["type"])
 	if room == Foyer.ROOM_FORAGE or room == Foyer.ROOM_MINE or room == Foyer.ROOM_DEFENSE:
 		room_ui.open_assign(Vector2i(rk))
+		_sfx("ui_open")
 	elif room == Foyer.ROOM_INFIRMERIE:
 		hud.flash("Infirmerie : %d blesse(s) au Foyer (%d lit(s) de soin par infirmerie)" % \
 			[pop.down_count(), Foyer.INFIRM_BEDS])
@@ -432,6 +483,7 @@ func _interact() -> void:
 			hud.flash("Atelier : outil au maximum   [4] cartouche anti-gaz (5 Li + 3 bois)")
 	else:
 		room_ui.open_stock(Vector2i(rk))   # hall et entrepôt : panneau dépôt / retrait
+		_sfx("ui_open")
 
 # La charge de perçage du Roi (M5) : [E] juste SOUS la barrière → un puits
 # d'échelles s'ouvre à travers la roche dense, la voie de la surface est libre.
@@ -464,10 +516,13 @@ func _deposit() -> void:
 		lost += have - moved
 	if lost > 0:
 		hud.flash("Stock du Foyer plein ! %d objet(s) restent dans le sac (construis un entrepot)" % lost)
+		_sfx("invalid")
 	elif moved_total > 0:
 		hud.flash("Depose : %d ressource(s) au stock du Foyer" % moved_total)
+		_sfx("ui_click")
 	else:
 		hud.flash("Sac vide : rien a deposer")
+		_sfx("invalid")
 
 func _withdraw_one(t: int) -> void:
 	# Stock → sac : retire toute la ressource demandée, dans la limite des slots libres.
@@ -475,21 +530,26 @@ func _withdraw_one(t: int) -> void:
 	var have := foyer.count(t)
 	if have <= 0:
 		hud.flash("Aucune %s en stock" % Inventory.res_name(t))
+		_sfx("invalid")
 		return
 	var moved := bag.add(t, have)
 	foyer.remove(t, moved)
 	if moved <= 0:
 		hud.flash("Sac plein : impossible de retirer")
+		_sfx("invalid")
 	elif moved < have:
 		hud.flash("Retire %d %s (sac plein : %d restent en stock)" % [moved, Inventory.res_name(t), have - moved])
+		_sfx("ui_click")
 	else:
 		hud.flash("Retire %d %s du stock" % [moved, Inventory.res_name(t)])
+		_sfx("ui_click")
 
 func _recover_cache() -> void:
 	for t in cache:
 		bag.add(t, int(cache[t]))
 	cache_active = false
 	hud.flash("Butin de la cache recupere !")
+	_sfx("pickup")
 
 # --- Fouille (M3) : conteneurs du Transit, [E], vidés une fois pour toutes ---------
 func _captive_near() -> int:
@@ -514,6 +574,7 @@ func _loot_crate(cell: Vector2i) -> void:
 	world.set_tile(cell.x, cell.y, WorldGrid.CRATE_OPEN)
 	view.mark_dirty()
 	marker.add_flash(cell, 0.2)
+	_sfx("pickup")
 	var roll := randf()
 	var msg: String
 	if roll < 0.35:
@@ -544,8 +605,10 @@ func _recycle_crate(cell: Vector2i) -> void:
 	var got := bag.add(WorldGrid.WOOD, w)
 	if got > 0:
 		hud.flash("Caisse demantelee : +%d bois" % got)
+		_sfx("pickup")
 	else:
 		hud.flash("Caisse demantelee, mais ton sac est plein !")
+		_sfx("invalid")
 
 func _loot_to_bag(t: int, n: int) -> String:
 	var got := bag.add(t, n)
@@ -566,6 +629,7 @@ func _place_torch() -> void:
 		bag.remove(WorldGrid.WOOD, 1)
 		light.torches.append(cell)
 		lights.add_torch(cell)
+		_sfx("ui_click")
 
 func _place_ladder() -> void:
 	# Pose une échelle dans la colonne, des pieds vers le haut, en remplissant le
@@ -589,8 +653,10 @@ func _place_ladder() -> void:
 	if placed > 0:
 		view.mark_dirty()
 		hud.flash("Echelle posee : %d tuiles (-%d bois)" % [placed, placed])
+		_sfx("build")
 	else:
 		hud.flash("Echelle : rien a poser (pas de place ou pas de bois)")
+		_sfx("invalid")
 
 # --- Atelier (pièce du Foyer requise, et il faut y être) -------------------------
 func _at_workshop() -> bool:
@@ -607,14 +673,17 @@ func _upgrade_tool() -> void:
 		return
 	if dig_level >= DIG_TIERS.size() - 1:
 		hud.flash("Outil deja au maximum (Acier)")
+		_sfx("invalid")
 		return
 	var cost: Dictionary = UPGRADE_COST[dig_level + 1]
 	if not foyer.can_pay(cost):
 		hud.flash("Outil %s : il faut %s (en stock au Foyer)" % [TIER_NAMES[dig_level + 1], _cost_text(cost)])
+		_sfx("invalid")
 		return
 	foyer.pay(cost)
 	dig_level += 1
 	hud.flash("Outil ameliore : %s (creusage plus rapide)" % TIER_NAMES[dig_level])
+	_sfx("build")
 
 static func _cost_text(cost: Dictionary) -> String:
 	var parts := []
@@ -627,16 +696,19 @@ func _craft_antipol() -> void:
 		return
 	if not foyer.can_pay(COST_ANTIPOL):
 		hud.flash("Pas assez en stock : il faut 5 lithium + 3 bois")
+		_sfx("invalid")
 		return
 	foyer.pay(COST_ANTIPOL)
 	hero.antipol_fuel += Hero.ANTIPOL_PER_CHARGE
 	hud.flash("Cartouche anti-gaz craftee (%d). Activer : touche M." % hero.antipol_charges())
+	_sfx("build")
 
 # --- Inventaire ----------------------------------------------------------------
 func _toggle_inventory() -> void:
 	inv_open = not inv_open
 	inv_ui.visible = inv_open
 	inv_ui.queue_redraw()
+	_sfx("ui_open" if inv_open else "ui_click")
 	if not inv_open:
 		inv_ui.drop_held()
 
@@ -682,6 +754,7 @@ func _break_tile(tx: int, ty: int) -> void:
 	world.set_tile(tx, ty, WorldGrid.EMPTY)
 	view.mark_dirty()
 	marker.add_flash(Vector2i(tx, ty), 0.18)
+	_sfx("dig", randf_range(0.9, 1.1))
 	if t == WorldGrid.WALL:
 		return   # béton : gravats, rien à ramasser
 	var item := WorldGrid.DIRT

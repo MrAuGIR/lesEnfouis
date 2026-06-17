@@ -29,6 +29,7 @@ var bag: Inventory
 var hud: Hud
 var view: MarkerView          # feedbacks (flash, traceur lus par le calque marqueurs)
 var raids: Raids              # branché par main.gd : butin des porteurs abattus (M4)
+var audio: Audio              # branché par main.gd : SFX coup / tir / mort
 
 var weapon := 0                  # arme courante : 0 = mêlée, 1 = arme à feu
 var ammo := START_AMMO           # munitions (réserve dédiée, pas dans le sac)
@@ -70,6 +71,8 @@ func swap_weapon() -> void:
 func _melee_attack() -> void:
 	atk_cd = MELEE_CD
 	atk_t = MELEE_VIS
+	if audio != null:
+		audio.play("melee", randf_range(0.92, 1.08))
 	for e in crew.list:
 		var v: Vector2 = e["pos"] - hero.pos
 		var d := v.length()
@@ -82,9 +85,13 @@ func _gun_fire() -> void:
 	if ammo <= 0:
 		gun_cd = 0.25
 		hud.flash("Plus de munitions ! (passe en melee : molette/X)")
+		if audio != null:
+			audio.play("invalid")
 		return
 	ammo -= 1
 	gun_cd = GUN_CD
+	if audio != null:
+		audio.play("shoot", randf_range(0.94, 1.06))
 	# Distance jusqu'au premier mur sur le rayon (occlusion).
 	var ts := float(WorldGrid.TILE)
 	var wall_d := GUN_RANGE
@@ -124,6 +131,8 @@ func _cull() -> void:
 			alive.append(e)
 			continue
 		view.add_flash(Vector2i(int(e["pos"].x / ts), int(e["pos"].y / ts)), 0.3)
+		if audio != null:
+			audio.play("enemy_down", randf_range(0.92, 1.06))
 		# Porteur de raid abattu : son butin volé tombe au sol (récupérable).
 		if raids != null and not (e.get("carry", {}) as Dictionary).is_empty():
 			raids.drop_at(Vector2(e["pos"]), e["carry"])

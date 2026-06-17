@@ -10,6 +10,7 @@ var foyer: Foyer
 var caravan: Caravan
 var combat: Combat
 var hud: Hud
+var audio: Audio          # branché par main.gd : SFX de troc
 
 func _gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
@@ -50,10 +51,14 @@ func _click(p: Vector2) -> void:
 		if _row_rect(i).has_point(p):
 			if not caravan.can_trade(i):
 				hud.flash("Troc impossible : stock insuffisant (ou plus de place)")
+				if audio != null:
+					audio.play("invalid")
 				return
 			var ammo := caravan.trade(i)
 			if ammo > 0:
 				combat.ammo += ammo
 			hud.flash("Troc effectue : %s" % Caravan.offer_text(i))
+			if audio != null:
+				audio.play("trade")
 			queue_redraw()
 			return
