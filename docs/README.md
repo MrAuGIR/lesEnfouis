@@ -13,6 +13,8 @@
 
 > *« L'humanité s'est enterrée. À toi de remonter. »*
 
+> 🛠️ **Développeur — installer, lancer & contribuer au jeu : [DEVELOPPEUR.md](DEVELOPPEUR.md)**
+
 > 📄 **Synthèse d'une page (pitch & vue d'ensemble) : [SYNTHESE.md](SYNTHESE.md)**
 > · 🛠️ **Plan de prototype (vertical slice) : [PROTOTYPE.md](PROTOTYPE.md)**
 > · 🎨 **Brief de direction artistique : [BRIEF-DIRECTION-ARTISTIQUE.md](BRIEF-DIRECTION-ARTISTIQUE.md)**
