@@ -12,10 +12,10 @@ const OCC_MARGIN := 6 # marge d'occulteurs autour de la fenêtre (lumières proc
 # Décor de fond contextuel. Parallaxe : 0 = collé à l'écran (très lointain), 1 = collé
 # au monde (pas de parallaxe). On reste proche de 1 → parallaxe DOUCE (réglage demandé).
 enum { BG_ROCK, BG_TUNNEL, BG_BASE }
-const ROCK_PAR := 0.86         # roche qu'on creuse : juste derrière → très peu de parallaxe
-const TUN_WALL_PAR := 0.80     # tunnels du Transit : un peu de profondeur
-const TUN_STRUCT_PAR := 0.72   # structures un cran plus proches que la paroi
-const BASE_PAR := 0.88         # mur de pièce : intérieur, quasi collé
+const ROCK_PAR := 0.93         # roche qu'on creuse : juste derrière → parallaxe minime
+const TUN_WALL_PAR := 0.90     # tunnels du Transit : un soupçon de profondeur
+const TUN_STRUCT_PAR := 0.85   # structures un cran plus proches que la paroi
+const BASE_PAR := 0.95         # mur de pièce : intérieur, quasi collé (1.0 = aucune parallaxe)
 const BG_FADE := 3.0           # vitesse du fondu entre deux contextes (1/s)
 
 var world: WorldGrid

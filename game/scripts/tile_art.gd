@@ -48,25 +48,32 @@ static func bg_base() -> Texture2D:
 	return _bg_base
 
 static func _build_bg_base() -> Image:
-	var w := 32
+	# 64×64, PANNEAUX VERTICAUX (pas de grille de carrés) : seams verticaux irréguliers,
+	# pas de joint horizontal, rivets épars → lecture « mur continu », pas « blocs collés ».
+	var w := 64
 	var im := Image.create(w, w, false, Image.FORMAT_RGBA8)
-	var base := Color(0.22, 0.19, 0.16)            # gris-brun chaud, désaturé
+	var base := Color(0.22, 0.19, 0.16)            # gris-brun chaud, désaturé (le havre)
 	for y in w:
 		for x in w:
-			im.set_pixel(x, y, _shade(base, (_h(x, y, 95) - 0.5) * 0.06))
-	for s in [0, 16]:                              # joints de panneaux (2×2 panneaux)
-		for i in w:
-			im.set_pixel(i, s, _shade(base, -0.08))
-			im.set_pixel(s, i, _shade(base, -0.08))
-	for ox in [0, 16]:                             # rivets aux coins de chaque panneau
-		for oy in [0, 16]:
-			for p: Vector2i in [Vector2i(3, 3), Vector2i(12, 3), Vector2i(3, 12), Vector2i(12, 12)]:
-				im.set_pixel(ox + p.x, oy + p.y, _shade(base, 0.12))
+			im.set_pixel(x, y, _shade(base, (_h(x, y, 95) - 0.5) * 0.05))
+	var seams := [0, 19, 38, 51]                   # largeurs de panneaux irrégulières
+	for sx: int in seams:
+		for y in w:
+			im.set_pixel(sx, y, _shade(base, -0.07))               # creux du joint
+			im.set_pixel((sx + 1) % w, y, _shade(base, 0.05))      # arête éclairée
+		im.set_pixel((sx + 2) % w, 5, _shade(base, 0.13))          # rivet haut, épars
+		im.set_pixel((sx + 2) % w, w - 6, _shade(base, 0.13))      # rivet bas
+	for k in 5:                                     # éraflures horizontales discrètes
+		var sy := int(_h(k, 0, 96) * (w - 4)) + 2
+		var sx0 := int(_h(0, k, 97) * (w - 18))
+		for x in range(sx0, sx0 + 12):
+			im.set_pixel(x, sy, _shade(im.get_pixel(x, sy), -0.03))
 	return im
 
-# Paroi du fond : roche sombre désaturée, grain faible + strates horizontales.
+# Paroi du fond : roche sombre désaturée. 48×48 (période de répétition longue) ;
+# strates rares et irrégulières (pas de bandes régulières → pas d'effet « blocs collés »).
 static func _build_bg_wall() -> Image:
-	var w := 32
+	var w := 48
 	var im := Image.create(w, w, false, Image.FORMAT_RGBA8)
 	var base := Color(0.13, 0.14, 0.17)
 	for y in w:
@@ -75,9 +82,10 @@ static func _build_bg_wall() -> Image:
 			if _h(x, y, 94) > 0.86:      # renfoncements sombres épars
 				c = _shade(c, -0.05)
 			im.set_pixel(x, y, c)
-	for sy in [7, 15, 23, 31]:           # strates horizontales discrètes
+	for sy: int in [13, 34]:             # 2 strates discrètes, à des hauteurs irrégulières
 		for x in w:
-			im.set_pixel(x, sy, _shade(im.get_pixel(x, sy), -0.05))
+			if _h(x, sy, 98) > 0.25:     # discontinues (pas une ligne pleine)
+				im.set_pixel(x, sy, _shade(im.get_pixel(x, sy), -0.045))
 	return im
 
 # Silhouettes d'infrastructure (transparent ailleurs) : étai vertical + traverse
