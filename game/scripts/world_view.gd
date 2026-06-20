@@ -185,25 +185,16 @@ func _draw() -> void:
 			if t == WorldGrid.EMPTY:
 				continue
 			if t == WorldGrid.LADDER:
-				var lc := Color(0.78, 0.56, 0.30)
-				draw_rect(Rect2(tx * ts + 3, ty * ts, 2, ts), lc)
-				draw_rect(Rect2(tx * ts + ts - 5, ty * ts, 2, ts), lc)
-				draw_rect(Rect2(tx * ts + 3, ty * ts + 4, ts - 8, 2), lc)
-				draw_rect(Rect2(tx * ts + 3, ty * ts + 10, ts - 8, 2), lc)
+				draw_texture_rect(TileArt.tex(WorldGrid.LADDER), rect, false)
 				continue
 			if t == WorldGrid.PASSERELLE:
 				if world.is_ladder_crossing(tx, ty):
-					# Croisement : l'échelle continue derrière, la passerelle DEVANT
-					var lc2 := Color(0.78, 0.56, 0.30)
-					draw_rect(Rect2(tx * ts + 3, ty * ts, 2, ts), lc2)
-					draw_rect(Rect2(tx * ts + ts - 5, ty * ts, 2, ts), lc2)
-					draw_rect(Rect2(tx * ts, ty * ts + 5, ts, 6), Color(0.50, 0.36, 0.16))
-					draw_rect(Rect2(tx * ts, ty * ts + 5, ts, 6), Color(0.7, 0.55, 0.28, 0.8), false, 1.0)
+					# Croisement : l'échelle continue derrière, la passerelle DEVANT (bande)
+					draw_texture_rect(TileArt.tex(WorldGrid.LADDER), rect, false)
+					draw_texture_rect_region(TileArt.tex(WorldGrid.PASSERELLE),
+						Rect2(tx * ts, ty * ts + 5, ts, 6), Rect2(0, 0, ts, 6))
 					continue
-				draw_rect(rect, Color(0.50, 0.36, 0.16))
-				draw_rect(Rect2(tx * ts, ty * ts + 4, ts, 1), Color(0.24, 0.16, 0.06))
-				draw_rect(Rect2(tx * ts, ty * ts + 10, ts, 1), Color(0.24, 0.16, 0.06))
-				draw_rect(rect, Color(0.7, 0.55, 0.28, 0.8), false, 1.0)
+				draw_texture_rect(TileArt.tex(WorldGrid.PASSERELLE), rect, false)
 				continue
 			# Caisses [E] et portes du boss : désormais texturées (cf. TileArt),
 			# elles passent par la branche générique ci-dessous.

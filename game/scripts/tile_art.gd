@@ -291,6 +291,35 @@ static func _build(t: int) -> Image:
 			for p: Vector2i in [Vector2i(2, 2), Vector2i(13, 2), Vector2i(2, 13), Vector2i(13, 13)]:
 				img.set_pixel(p.x, p.y, _shade(mb, 0.32))   # rivets d'angle
 			_frame(img, Color(0.14, 0.06, 0.05))
+		WorldGrid.LADDER:
+			# échelle de bois : 2 montants + barreaux, TRANSPARENT entre (décor visible)
+			img.fill(Color(0, 0, 0, 0))
+			var rail := Color(0.60, 0.42, 0.20, 1.0)
+			var rail_d := Color(0.42, 0.28, 0.12, 1.0)
+			var rung := Color(0.72, 0.54, 0.30, 1.0)
+			for y in S:
+				img.set_pixel(3, y, rail_d)
+				img.set_pixel(4, y, rail)
+				img.set_pixel(11, y, rail)
+				img.set_pixel(12, y, rail_d)
+			for ry: int in [3, 11]:                 # barreaux (2 px) reliant les montants
+				for x in range(4, 12):
+					img.set_pixel(x, ry, rung)
+					img.set_pixel(x, ry + 1, rail_d)
+		WorldGrid.PASSERELLE:
+			# planche de bois (sol) : boards horizontaux, PAS de bord vertical → continu
+			var pb := Color(0.52, 0.38, 0.17)
+			for y in S:
+				for x in S:
+					img.set_pixel(x, y, _shade(pb, (_h(y, x, 84) - 0.5) * 0.08))
+			for x in S:
+				img.set_pixel(x, 1, _shade(pb, 0.12))   # reflet sur la surface de marche
+			for sy: int in [0, 6, 11]:               # joints entre planches
+				for x in S:
+					img.set_pixel(x, sy, _shade(pb, -0.18))
+			for ny: int in [3, 8, 13]:               # clous aux extrémités
+				img.set_pixel(2, ny, _shade(pb, 0.16))
+				img.set_pixel(13, ny, _shade(pb, 0.16))
 		_:
 			return null
 	return img
