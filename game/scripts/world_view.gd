@@ -150,23 +150,8 @@ func _draw() -> void:
 				draw_rect(Rect2(tx * ts, ty * ts + 10, ts, 1), Color(0.24, 0.16, 0.06))
 				draw_rect(rect, Color(0.7, 0.55, 0.28, 0.8), false, 1.0)
 				continue
-			if t == WorldGrid.BOSS_DOOR:
-				# Portes scellées du terminal du Roi : métal rouillé barré
-				draw_rect(rect, tile_color(t))
-				draw_rect(Rect2(tx * ts, ty * ts + 6, ts, 3), Color(0.62, 0.30, 0.18))
-				draw_rect(rect, Color(0.14, 0.06, 0.05), false, 1.5)
-				continue
-			if t == WorldGrid.CRATE or t == WorldGrid.CRATE_OPEN:
-				# Conteneur (fouillable [E] ; ouvert = vidé) : caisse à planches croisées
-				draw_rect(rect, tile_color(t))
-				var edge := Color(0.28, 0.20, 0.08) if t == WorldGrid.CRATE else Color(0.18, 0.14, 0.07)
-				draw_rect(rect, edge, false, 2.0)
-				if t == WorldGrid.CRATE:
-					draw_line(Vector2(tx * ts + 2, ty * ts + 2), Vector2(tx * ts + ts - 2, ty * ts + ts - 2), edge, 1.5)
-					draw_line(Vector2(tx * ts + ts - 2, ty * ts + 2), Vector2(tx * ts + 2, ty * ts + ts - 2), edge, 1.5)
-				else:
-					draw_rect(Rect2(tx * ts + 3, ty * ts + 3, ts - 6, 4), Color(0.08, 0.07, 0.05))
-				continue
+			# Caisses [E] et portes du boss : désormais texturées (cf. TileArt),
+			# elles passent par la branche générique ci-dessous.
 			var tex := TileArt.tex(t)   # texture pixel-art (grain, minerais, biseau)
 			if tex != null:
 				draw_texture_rect(tex, rect, false)

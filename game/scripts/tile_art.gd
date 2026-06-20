@@ -53,6 +53,14 @@ static func _bevel(img: Image, light: float, dark: float) -> void:
 		img.set_pixel(i, S - 1, _shade(img.get_pixel(i, S - 1), dark))  # bas
 		img.set_pixel(S - 1, i, _shade(img.get_pixel(S - 1, i), dark))  # droite
 
+# Cadre 1 px tout autour (lecture « objet/structure », pas un bloc naturel).
+static func _frame(img: Image, c: Color) -> void:
+	for i in S:
+		img.set_pixel(i, 0, c)
+		img.set_pixel(i, S - 1, c)
+		img.set_pixel(0, i, c)
+		img.set_pixel(S - 1, i, c)
+
 # Cristal angulaire (losange) — signature visuelle du lithium.
 static func _crystal(img: Image, cx: int, cy: int, r: int, c: Color) -> void:
 	for dy in range(-r, r + 1):
@@ -140,6 +148,52 @@ static func _build(t: int) -> Image:
 			_nodule(img, 11, 9, 3, Color(0.62, 0.43, 0.32))
 			_nodule(img, 7, 12, 1, Color(0.58, 0.40, 0.30))
 			_bevel(img, 0.07, -0.11)
+		WorldGrid.CRATE:
+			# caisse à fouiller [E] : planches + croix de renfort, cadre marqué
+			var wb := Color(0.52, 0.38, 0.18)
+			for y in S:
+				for x in S:
+					img.set_pixel(x, y, _shade(wb, (_h(x, y, 81) - 0.5) * 0.10))
+			for ry in [4, 9, 14]:                       # rails horizontaux
+				for x in S:
+					img.set_pixel(x, ry, _shade(wb, -0.14))
+			for i in S:                                 # croix de renfort (bois clair)
+				img.set_pixel(i, i, _shade(wb, 0.18))
+				img.set_pixel(S - 1 - i, i, _shade(wb, 0.18))
+			_frame(img, _shade(wb, -0.24))
+			_bevel(img, 0.10, -0.12)
+		WorldGrid.CRATE_OPEN:
+			# caisse déjà vidée : couvercle ouvert (intérieur sombre), bois terni
+			var ob := Color(0.34, 0.27, 0.14)
+			for y in S:
+				for x in S:
+					img.set_pixel(x, y, _shade(ob, (_h(x, y, 82) - 0.5) * 0.10))
+			for y in range(2, 7):                       # ouverture sombre (vidée)
+				for x in range(2, S - 2):
+					img.set_pixel(x, y, Color(0.10, 0.08, 0.05))
+			for ry in [10, 13]:                         # planches restantes
+				for x in S:
+					img.set_pixel(x, ry, _shade(ob, -0.12))
+			_frame(img, _shade(ob, -0.20))
+			_bevel(img, 0.06, -0.10)
+		WorldGrid.BOSS_DOOR:
+			# portes scellées du Roi : métal rouillé, vantaux, barre à chevrons
+			# (danger doublé par la FORME — chevrons + rivets — pas que le rouge).
+			var mb := Color(0.40, 0.17, 0.14)
+			for y in S:
+				for x in S:
+					img.set_pixel(x, y, _shade(mb, (_h(x, y, 83) - 0.5) * 0.10))
+			for y in S:                                 # joint central des deux vantaux
+				img.set_pixel(7, y, _shade(mb, -0.22))
+				img.set_pixel(8, y, _shade(mb, 0.06))
+			for x in S:                                 # barre de renfort + chevrons clairs
+				img.set_pixel(x, 7, _shade(mb, -0.16))
+				img.set_pixel(x, 8, _shade(mb, -0.16))
+				if x % 4 < 2:
+					img.set_pixel(x, 7, _shade(mb, 0.26))
+			for p: Vector2i in [Vector2i(2, 2), Vector2i(13, 2), Vector2i(2, 13), Vector2i(13, 13)]:
+				img.set_pixel(p.x, p.y, _shade(mb, 0.32))   # rivets d'angle
+			_frame(img, Color(0.14, 0.06, 0.05))
 		_:
 			return null
 	return img
