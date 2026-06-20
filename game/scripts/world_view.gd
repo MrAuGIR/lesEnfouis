@@ -167,11 +167,12 @@ func _draw() -> void:
 				else:
 					draw_rect(Rect2(tx * ts + 3, ty * ts + 3, ts - 6, 4), Color(0.08, 0.07, 0.05))
 				continue
-			draw_rect(rect, tile_color(t))
-			if t == WorldGrid.IRON:   # nodules de fer dans la roche
-				draw_rect(Rect2(tx * ts + 3, ty * ts + 4, 4, 4), Color(0.78, 0.55, 0.40))
-				draw_rect(Rect2(tx * ts + 9, ty * ts + 9, 4, 4), Color(0.78, 0.55, 0.40))
-			draw_rect(rect, Color(0, 0, 0, 0.15), false, 1.0)
+			var tex := TileArt.tex(t)   # texture pixel-art (grain, minerais, biseau)
+			if tex != null:
+				draw_texture_rect(tex, rect, false)
+			else:
+				draw_rect(rect, tile_color(t))
+				draw_rect(rect, Color(0, 0, 0, 0.15), false, 1.0)
 	# Rails du métro (Transit) : posés sur le sol des tunnels, clippés à la vue
 	for m in world.metro_rects:
 		var mr: Rect2i = m

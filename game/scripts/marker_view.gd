@@ -72,9 +72,14 @@ func _draw() -> void:
 			var v := light.face_light(tx, ty)
 			if v <= 0.04:
 				continue
-			var col := WorldView.tile_color(t)
-			draw_rect(Rect2(tx * ts, ty * ts, ts, ts), Color(col.r, col.g, col.b, v * 0.85))
-			draw_rect(Rect2(tx * ts, ty * ts, ts, ts), Color(0, 0, 0, 0.15 * v), false, 1.0)
+			var fr := Rect2(tx * ts, ty * ts, ts, ts)
+			var tex := TileArt.tex(t)   # même texture que les blocs révélés, modulée par la lumière reçue
+			if tex != null:
+				draw_texture_rect(tex, fr, false, Color(1, 1, 1, v * 0.85))
+			else:
+				var col := WorldView.tile_color(t)
+				draw_rect(fr, Color(col.r, col.g, col.b, v * 0.85))
+				draw_rect(fr, Color(0, 0, 0, 0.15 * v), false, 1.0)
 	# Voile de gaz toxique (info de zone) au-dessus de GAS_FLOOR_ROW
 	var gas_top := float((pty - WorldView.VIEW_RY) * ts)
 	var gas_bot := minf(float(WorldGrid.GAS_FLOOR_ROW * ts), float((pty + WorldView.VIEW_RY) * ts))
