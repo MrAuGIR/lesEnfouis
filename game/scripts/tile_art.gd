@@ -29,6 +29,7 @@ static func tex(t: int) -> Texture2D:
 # dimensions par la lampe comme le reste. Tuilées par world_view avec parallaxe.
 static var _bg_wall: Texture2D
 static var _bg_struct: Texture2D
+static var _bg_base: Texture2D
 
 static func bg_wall() -> Texture2D:
 	if _bg_wall == null:
@@ -39,6 +40,29 @@ static func bg_struct() -> Texture2D:
 	if _bg_struct == null:
 		_bg_struct = ImageTexture.create_from_image(_build_bg_struct())
 	return _bg_struct
+
+# Mur intérieur du Foyer : panneaux finis, teinte chaude (le havre), rivets.
+static func bg_base() -> Texture2D:
+	if _bg_base == null:
+		_bg_base = ImageTexture.create_from_image(_build_bg_base())
+	return _bg_base
+
+static func _build_bg_base() -> Image:
+	var w := 32
+	var im := Image.create(w, w, false, Image.FORMAT_RGBA8)
+	var base := Color(0.22, 0.19, 0.16)            # gris-brun chaud, désaturé
+	for y in w:
+		for x in w:
+			im.set_pixel(x, y, _shade(base, (_h(x, y, 95) - 0.5) * 0.06))
+	for s in [0, 16]:                              # joints de panneaux (2×2 panneaux)
+		for i in w:
+			im.set_pixel(i, s, _shade(base, -0.08))
+			im.set_pixel(s, i, _shade(base, -0.08))
+	for ox in [0, 16]:                             # rivets aux coins de chaque panneau
+		for oy in [0, 16]:
+			for p: Vector2i in [Vector2i(3, 3), Vector2i(12, 3), Vector2i(3, 12), Vector2i(12, 12)]:
+				im.set_pixel(ox + p.x, oy + p.y, _shade(base, 0.12))
+	return im
 
 # Paroi du fond : roche sombre désaturée, grain faible + strates horizontales.
 static func _build_bg_wall() -> Image:

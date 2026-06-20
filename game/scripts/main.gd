@@ -91,6 +91,7 @@ func _ready() -> void:
 	view.crew = crew
 	view.pop = pop
 	view.caravan = caravan
+	view.foyer = foyer
 	add_child(view)
 	# Le vrai éclairage : obscurité + soleil + lampe/halo (+ torches, pièces)
 	lights = LightRig.new(hero)

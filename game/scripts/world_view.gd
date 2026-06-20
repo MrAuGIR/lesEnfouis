@@ -9,8 +9,14 @@ extends Node2D
 const VIEW_RX := 34   # demi-largeur de la fenêtre de tuiles dessinées
 const VIEW_RY := 22
 const OCC_MARGIN := 6 # marge d'occulteurs autour de la fenêtre (lumières proches)
-const BG_WALL_PAR := 0.45   # facteur de parallaxe paroi du fond (0=fixe écran, 1=collé au monde)
-const BG_STRUCT_PAR := 0.6  # structures un peu plus proches que la paroi → profondeur
+# Décor de fond contextuel. Parallaxe : 0 = collé à l'écran (très lointain), 1 = collé
+# au monde (pas de parallaxe). On reste proche de 1 → parallaxe DOUCE (réglage demandé).
+enum { BG_ROCK, BG_TUNNEL, BG_BASE }
+const ROCK_PAR := 0.86         # roche qu'on creuse : juste derrière → très peu de parallaxe
+const TUN_WALL_PAR := 0.80     # tunnels du Transit : un peu de profondeur
+const TUN_STRUCT_PAR := 0.72   # structures un cran plus proches que la paroi
+const BASE_PAR := 0.88         # mur de pièce : intérieur, quasi collé
+const BG_FADE := 3.0           # vitesse du fondu entre deux contextes (1/s)
 
 var world: WorldGrid
 var hero: Hero
@@ -18,6 +24,11 @@ var light: LightField          # registre des torches posées
 var crew: EnemyCrew
 var pop: Population
 var caravan: Caravan
+var foyer: Foyer               # pour savoir si le héros est dans une pièce de base
+
+var _bg_theme := -1            # contexte de fond courant (cf. enum)
+var _bg_prev := -1            # contexte précédent, le temps du fondu
+var _bg_blend := 1.0          # 0→1 : avancement du fondu vers _bg_theme
 
 var _occluders: Array[LightOccluder2D] = []
 var _occ_center := Vector2i(-9999, -9999)
@@ -27,8 +38,37 @@ func _ready() -> void:
 	# Tiling des couches de fond parallaxes (draw_texture_rect_region répété).
 	texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
 
-func tick(_delta: float) -> void:
+# Quel décor de fond selon où se trouve le héros.
+func _context_theme() -> int:
+	if foyer != null and foyer.room_type_at(hero.pos) != -1:
+		return BG_BASE
+	var ty := int(hero.pos.y / WorldGrid.TILE)
+	if ty >= WorldGrid.TRANSIT_TOP and ty <= WorldGrid.TRANSIT_BOT:
+		return BG_TUNNEL
+	return BG_ROCK
+
+# Dessine les couches d'un thème de fond (paroi + éventuelles structures), en
+# parallaxe (région source décalée d'une fraction de la position du héros), à l'alpha a.
+func _draw_bg_layers(theme: int, dest: Rect2, sz: Vector2, a: float) -> void:
+	match theme:
+		BG_BASE:
+			draw_texture_rect_region(TileArt.bg_base(), dest, Rect2(hero.pos * BASE_PAR, sz), Color(1, 1, 1, a))
+		BG_TUNNEL:
+			draw_texture_rect_region(TileArt.bg_wall(), dest, Rect2(hero.pos * TUN_WALL_PAR, sz), Color(1, 1, 1, a))
+			draw_texture_rect_region(TileArt.bg_struct(), dest, Rect2(hero.pos * TUN_STRUCT_PAR, sz), Color(1, 1, 1, a))
+		_:
+			draw_texture_rect_region(TileArt.bg_wall(), dest, Rect2(hero.pos * ROCK_PAR, sz), Color(1, 1, 1, a))
+
+func tick(delta: float) -> void:
 	queue_redraw()
+	# Contexte de fond : pièce de base > couche Transit > roche. Fondu si ça change.
+	var target := _context_theme()
+	if target != _bg_theme:
+		_bg_prev = _bg_theme
+		_bg_theme = target
+		_bg_blend = 0.0 if _bg_prev != -1 else 1.0
+	if _bg_blend < 1.0:
+		_bg_blend = minf(1.0, _bg_blend + delta * BG_FADE)
 	var c := Vector2i(int(hero.pos.x / WorldGrid.TILE), int(hero.pos.y / WorldGrid.TILE))
 	if _occ_dirty or c != _occ_center:
 		_occ_center = c
@@ -125,9 +165,13 @@ func _draw() -> void:
 	var bg_pos := Vector2((ptx - VIEW_RX) * ts, (pty - VIEW_RY) * ts)
 	var bg_size := Vector2((VIEW_RX * 2) * ts, (VIEW_RY * 2) * ts)
 	var dest := Rect2(bg_pos, bg_size)
-	draw_rect(dest, Color(0.10, 0.11, 0.13))
-	draw_texture_rect_region(TileArt.bg_wall(), dest, Rect2(hero.pos * BG_WALL_PAR, bg_size))
-	draw_texture_rect_region(TileArt.bg_struct(), dest, Rect2(hero.pos * BG_STRUCT_PAR, bg_size))
+	draw_rect(dest, Color(0.10, 0.11, 0.13))   # base sombre commune (jamais de trou)
+	var cur := _bg_theme if _bg_theme >= 0 else _context_theme()
+	if _bg_prev >= 0 and _bg_blend < 1.0:      # fondu entre contextes
+		_draw_bg_layers(_bg_prev, dest, bg_size, 1.0 - _bg_blend)
+		_draw_bg_layers(cur, dest, bg_size, _bg_blend)
+	else:
+		_draw_bg_layers(cur, dest, bg_size, 1.0)
 	for tx in range(ptx - VIEW_RX, ptx + VIEW_RX):
 		var s := world.surface[clampi(tx, 0, WorldGrid.GRID_W - 1)]
 		if s > pty - VIEW_RY:
