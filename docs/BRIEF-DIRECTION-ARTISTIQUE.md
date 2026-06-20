@@ -21,6 +21,8 @@
 > [L'ennemi Robot](../concept-art/brief-concept-ennemi-robot.md) ·
 > [Le HUD](../concept-art/brief-concept-hud.md) ·
 > [Le décor de fond](../concept-art/brief-concept-decor-fond.md).
+>
+> 🎮 **Briefs de PRODUCTION (assets jouables) :** [Le Héros — sprites & anims](../concept-art/brief-prod-heros.md).
 
 ## 1. Le projet en bref
 
