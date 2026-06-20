@@ -23,6 +23,71 @@ static func tex(t: int) -> Texture2D:
 	_cache[t] = tx
 	return tx
 
+# --- Décor de fond (parallaxe) -----------------------------------------------
+# Deux couches en retrait derrière les tuiles : paroi rocheuse (loin) + silhouettes
+# d'infrastructure (étais, traverses, tuyau). Désaturées/sombres (bible) : révélées
+# dimensions par la lampe comme le reste. Tuilées par world_view avec parallaxe.
+static var _bg_wall: Texture2D
+static var _bg_struct: Texture2D
+
+static func bg_wall() -> Texture2D:
+	if _bg_wall == null:
+		_bg_wall = ImageTexture.create_from_image(_build_bg_wall())
+	return _bg_wall
+
+static func bg_struct() -> Texture2D:
+	if _bg_struct == null:
+		_bg_struct = ImageTexture.create_from_image(_build_bg_struct())
+	return _bg_struct
+
+# Paroi du fond : roche sombre désaturée, grain faible + strates horizontales.
+static func _build_bg_wall() -> Image:
+	var w := 32
+	var im := Image.create(w, w, false, Image.FORMAT_RGBA8)
+	var base := Color(0.13, 0.14, 0.17)
+	for y in w:
+		for x in w:
+			var c := _shade(base, (_h(x, y, 91) - 0.5) * 0.09)
+			if _h(x, y, 94) > 0.86:      # renfoncements sombres épars
+				c = _shade(c, -0.05)
+			im.set_pixel(x, y, c)
+	for sy in [7, 15, 23, 31]:           # strates horizontales discrètes
+		for x in w:
+			im.set_pixel(x, sy, _shade(im.get_pixel(x, sy), -0.05))
+	return im
+
+# Silhouettes d'infrastructure (transparent ailleurs) : étai vertical + traverse
+# + tuyau. Tuilé → colonnes de soutènement récurrentes. Garde l'alpha (≠ _shade).
+static func _build_bg_struct() -> Image:
+	var w := 48
+	var h := 64
+	var im := Image.create(w, h, false, Image.FORMAT_RGBA8)
+	im.fill(Color(0, 0, 0, 0))
+	var wood := Color(0.17, 0.14, 0.10, 0.88)
+	var wood_d := Color(0.10, 0.08, 0.05, 0.90)
+	var metal := Color(0.16, 0.17, 0.20, 0.85)
+	for y in h:                          # étai vertical (x 21..26) + arêtes sombres
+		for x in range(21, 27):
+			im.set_pixel(x, y, wood)
+		im.set_pixel(21, y, wood_d)
+		im.set_pixel(26, y, wood_d)
+		for x in range(6, 9):            # tuyau métallique (x 6..8)
+			im.set_pixel(x, y, metal)
+	for x in range(14, 34):              # traverse courte (≠ pleine largeur → pas de grille)
+		for y in range(10, 15):
+			im.set_pixel(x, y, wood)
+		im.set_pixel(x, 10, wood_d)
+		im.set_pixel(x, 14, wood_d)
+	for d in 6:                          # jambes de force diagonales (look charpente)
+		im.set_pixel(20 - d, 15 + d, wood)
+		im.set_pixel(27 + d, 15 + d, wood)
+	for bx in [18, 24, 30]:              # boulons sur la traverse
+		im.set_pixel(bx, 12, Color(0.30, 0.26, 0.18, 0.95))
+	for y in range(30, 33):              # joint du tuyau
+		for x in range(5, 10):
+			im.set_pixel(x, y, Color(0.22, 0.23, 0.26, 0.9))
+	return im
+
 # --- Outils ------------------------------------------------------------------
 # Hash déterministe 0..1 à partir de (x, y) et d'une graine (canal de bruit).
 static func _h(x: int, y: int, s: int) -> float:

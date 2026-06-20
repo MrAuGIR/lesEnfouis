@@ -9,6 +9,8 @@ extends Node2D
 const VIEW_RX := 34   # demi-largeur de la fenêtre de tuiles dessinées
 const VIEW_RY := 22
 const OCC_MARGIN := 6 # marge d'occulteurs autour de la fenêtre (lumières proches)
+const BG_WALL_PAR := 0.45   # facteur de parallaxe paroi du fond (0=fixe écran, 1=collé au monde)
+const BG_STRUCT_PAR := 0.6  # structures un peu plus proches que la paroi → profondeur
 
 var world: WorldGrid
 var hero: Hero
@@ -20,6 +22,10 @@ var caravan: Caravan
 var _occluders: Array[LightOccluder2D] = []
 var _occ_center := Vector2i(-9999, -9999)
 var _occ_dirty := true
+
+func _ready() -> void:
+	# Tiling des couches de fond parallaxes (draw_texture_rect_region répété).
+	texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
 
 func tick(_delta: float) -> void:
 	queue_redraw()
@@ -113,10 +119,15 @@ func _draw() -> void:
 	var ts := WorldGrid.TILE
 	var ptx := int(hero.pos.x / ts)
 	var pty := int(hero.pos.y / ts)
-	# Fond : caverne (révélé par la lampe) + bandes de ciel au-dessus du relief
+	# Fond : décor en RETRAIT (révélé par la lampe) — base sombre + paroi rocheuse
+	# + silhouettes d'infrastructure, en PARALLAXE (région source décalée d'une
+	# fraction de la position du héros) → profondeur. Puis bandes de ciel au-dessus.
 	var bg_pos := Vector2((ptx - VIEW_RX) * ts, (pty - VIEW_RY) * ts)
 	var bg_size := Vector2((VIEW_RX * 2) * ts, (VIEW_RY * 2) * ts)
-	draw_rect(Rect2(bg_pos, bg_size), Color(0.16, 0.17, 0.20))
+	var dest := Rect2(bg_pos, bg_size)
+	draw_rect(dest, Color(0.10, 0.11, 0.13))
+	draw_texture_rect_region(TileArt.bg_wall(), dest, Rect2(hero.pos * BG_WALL_PAR, bg_size))
+	draw_texture_rect_region(TileArt.bg_struct(), dest, Rect2(hero.pos * BG_STRUCT_PAR, bg_size))
 	for tx in range(ptx - VIEW_RX, ptx + VIEW_RX):
 		var s := world.surface[clampi(tx, 0, WorldGrid.GRID_W - 1)]
 		if s > pty - VIEW_RY:
