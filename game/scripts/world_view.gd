@@ -9,14 +9,8 @@ extends Node2D
 const VIEW_RX := 34   # demi-largeur de la fenêtre de tuiles dessinées
 const VIEW_RY := 22
 const OCC_MARGIN := 6 # marge d'occulteurs autour de la fenêtre (lumières proches)
-# Décor de fond contextuel. Parallaxe : 0 = collé à l'écran (très lointain), 1 = collé
-# au monde (pas de parallaxe). On reste proche de 1 → parallaxe DOUCE (réglage demandé).
-enum { BG_ROCK, BG_TUNNEL, BG_BASE }
-const ROCK_PAR := 0.93         # roche qu'on creuse : juste derrière → parallaxe minime
-const TUN_WALL_PAR := 0.90     # tunnels du Transit : un soupçon de profondeur
-const TUN_STRUCT_PAR := 0.85   # structures un cran plus proches que la paroi
-const BASE_PAR := 0.95         # mur de pièce : intérieur, quasi collé (1.0 = aucune parallaxe)
-const BG_FADE := 3.0           # vitesse du fondu entre deux contextes (1/s)
+# Décor de fond : dessiné PAR ZONE (roche partout, bande Transit, pièces du Foyer) et
+# ANCRÉ AU MONDE — pas de parallaxe ; chaque région garde son propre fond où qu'on soit.
 
 var world: WorldGrid
 var hero: Hero
@@ -24,51 +18,24 @@ var light: LightField          # registre des torches posées
 var crew: EnemyCrew
 var pop: Population
 var caravan: Caravan
-var foyer: Foyer               # pour savoir si le héros est dans une pièce de base
-
-var _bg_theme := -1            # contexte de fond courant (cf. enum)
-var _bg_prev := -1            # contexte précédent, le temps du fondu
-var _bg_blend := 1.0          # 0→1 : avancement du fondu vers _bg_theme
+var foyer: Foyer               # pour dessiner le fond des pièces de base à leur place
 
 var _occluders: Array[LightOccluder2D] = []
 var _occ_center := Vector2i(-9999, -9999)
 var _occ_dirty := true
 
 func _ready() -> void:
-	# Tiling des couches de fond parallaxes (draw_texture_rect_region répété).
+	# Tiling des fonds (draw_texture_rect_region répété).
 	texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
 
-# Quel décor de fond selon où se trouve le héros.
-func _context_theme() -> int:
-	if foyer != null and foyer.room_type_at(hero.pos) != -1:
-		return BG_BASE
-	var ty := int(hero.pos.y / WorldGrid.TILE)
-	if ty >= WorldGrid.TRANSIT_TOP and ty <= WorldGrid.TRANSIT_BOT:
-		return BG_TUNNEL
-	return BG_ROCK
+# Pose une texture de fond TUILÉE et ANCRÉE AU MONDE sur le rectangle r (coords monde) :
+# la région source démarre à r.position → continuité parfaite entre régions, zéro parallaxe.
+func _bg_blit(tex: Texture2D, r: Rect2) -> void:
+	if tex != null and r.size.x > 0.0 and r.size.y > 0.0:
+		draw_texture_rect_region(tex, r, Rect2(r.position, r.size))
 
-# Dessine les couches d'un thème de fond (paroi + éventuelles structures), en
-# parallaxe (région source décalée d'une fraction de la position du héros), à l'alpha a.
-func _draw_bg_layers(theme: int, dest: Rect2, sz: Vector2, a: float) -> void:
-	match theme:
-		BG_BASE:
-			draw_texture_rect_region(TileArt.bg_base(), dest, Rect2(hero.pos * BASE_PAR, sz), Color(1, 1, 1, a))
-		BG_TUNNEL:
-			draw_texture_rect_region(TileArt.bg_wall(), dest, Rect2(hero.pos * TUN_WALL_PAR, sz), Color(1, 1, 1, a))
-			draw_texture_rect_region(TileArt.bg_struct(), dest, Rect2(hero.pos * TUN_STRUCT_PAR, sz), Color(1, 1, 1, a))
-		_:
-			draw_texture_rect_region(TileArt.bg_wall(), dest, Rect2(hero.pos * ROCK_PAR, sz), Color(1, 1, 1, a))
-
-func tick(delta: float) -> void:
+func tick(_delta: float) -> void:
 	queue_redraw()
-	# Contexte de fond : pièce de base > couche Transit > roche. Fondu si ça change.
-	var target := _context_theme()
-	if target != _bg_theme:
-		_bg_prev = _bg_theme
-		_bg_theme = target
-		_bg_blend = 0.0 if _bg_prev != -1 else 1.0
-	if _bg_blend < 1.0:
-		_bg_blend = minf(1.0, _bg_blend + delta * BG_FADE)
 	var c := Vector2i(int(hero.pos.x / WorldGrid.TILE), int(hero.pos.y / WorldGrid.TILE))
 	if _occ_dirty or c != _occ_center:
 		_occ_center = c
@@ -166,12 +133,17 @@ func _draw() -> void:
 	var bg_size := Vector2((VIEW_RX * 2) * ts, (VIEW_RY * 2) * ts)
 	var dest := Rect2(bg_pos, bg_size)
 	draw_rect(dest, Color(0.10, 0.11, 0.13))   # base sombre commune (jamais de trou)
-	var cur := _bg_theme if _bg_theme >= 0 else _context_theme()
-	if _bg_prev >= 0 and _bg_blend < 1.0:      # fondu entre contextes
-		_draw_bg_layers(_bg_prev, dest, bg_size, 1.0 - _bg_blend)
-		_draw_bg_layers(cur, dest, bg_size, _bg_blend)
-	else:
-		_draw_bg_layers(cur, dest, bg_size, 1.0)
+	# Fond PAR ZONE (chacune à sa place, où que soit le héros) :
+	_bg_blit(TileArt.bg_roche(), dest)                                   # roche partout (défaut)
+	var tun := dest.intersection(Rect2(dest.position.x, WorldGrid.TRANSIT_TOP * ts,    # bande Transit
+		dest.size.x, (WorldGrid.TRANSIT_BOT - WorldGrid.TRANSIT_TOP + 1) * ts))
+	_bg_blit(TileArt.bg_tunnel_paroi(), tun)
+	_bg_blit(TileArt.bg_tunnel_struct(), tun)
+	if foyer != null:                                                    # chaque pièce du Foyer
+		for mp in foyer.rooms:
+			var fr: Rect2i = foyer.footprint(mp)
+			_bg_blit(TileArt.bg_base(), dest.intersection(
+				Rect2(fr.position.x * ts, fr.position.y * ts, fr.size.x * ts, fr.size.y * ts)))
 	for tx in range(ptx - VIEW_RX, ptx + VIEW_RX):
 		var s := world.surface[clampi(tx, 0, WorldGrid.GRID_W - 1)]
 		if s > pty - VIEW_RY:

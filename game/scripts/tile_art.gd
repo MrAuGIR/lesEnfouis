@@ -24,101 +24,34 @@ static func tex(t: int) -> Texture2D:
 	return tx
 
 # --- Décor de fond (parallaxe) -----------------------------------------------
-# Deux couches en retrait derrière les tuiles : paroi rocheuse (loin) + silhouettes
-# d'infrastructure (étais, traverses, tuyau). Désaturées/sombres (bible) : révélées
-# dimensions par la lampe comme le reste. Tuilées par world_view avec parallaxe.
-static var _bg_wall: Texture2D
-static var _bg_struct: Texture2D
+# Couches en retrait derrière les tuiles, tuilées par world_view avec parallaxe.
+# Roche & tunnel = ASSETS du designer rendus tuilables sans couture (art/decor/) ;
+# base = mur généré par code (la scène livrée n'avait pas de mur tuilable propre).
+static var _bg_roche: Texture2D
+static var _bg_tunnel_paroi: Texture2D
+static var _bg_tunnel_struct: Texture2D
 static var _bg_base: Texture2D
 
-static func bg_wall() -> Texture2D:
-	if _bg_wall == null:
-		_bg_wall = ImageTexture.create_from_image(_build_bg_wall())
-	return _bg_wall
+static func bg_roche() -> Texture2D:
+	if _bg_roche == null:
+		_bg_roche = load("res://art/decor/bg_roche.png")
+	return _bg_roche
 
-static func bg_struct() -> Texture2D:
-	if _bg_struct == null:
-		_bg_struct = ImageTexture.create_from_image(_build_bg_struct())
-	return _bg_struct
+static func bg_tunnel_paroi() -> Texture2D:
+	if _bg_tunnel_paroi == null:
+		_bg_tunnel_paroi = load("res://art/decor/bg_tunnel_paroi.png")
+	return _bg_tunnel_paroi
 
-# Mur intérieur du Foyer : panneaux finis, teinte chaude (le havre), rivets.
+static func bg_tunnel_struct() -> Texture2D:
+	if _bg_tunnel_struct == null:
+		_bg_tunnel_struct = load("res://art/decor/bg_tunnel_structures.png")
+	return _bg_tunnel_struct
+
+# Mur intérieur du Foyer (le havre) : asset designer, mur chaud rendu tuilable (art/decor/).
 static func bg_base() -> Texture2D:
 	if _bg_base == null:
-		_bg_base = ImageTexture.create_from_image(_build_bg_base())
+		_bg_base = load("res://art/decor/bg_base.png")
 	return _bg_base
-
-static func _build_bg_base() -> Image:
-	# 64×64, PANNEAUX VERTICAUX (pas de grille de carrés) : seams verticaux irréguliers,
-	# pas de joint horizontal, rivets épars → lecture « mur continu », pas « blocs collés ».
-	var w := 64
-	var im := Image.create(w, w, false, Image.FORMAT_RGBA8)
-	var base := Color(0.22, 0.19, 0.16)            # gris-brun chaud, désaturé (le havre)
-	for y in w:
-		for x in w:
-			im.set_pixel(x, y, _shade(base, (_h(x, y, 95) - 0.5) * 0.05))
-	var seams := [0, 19, 38, 51]                   # largeurs de panneaux irrégulières
-	for sx: int in seams:
-		for y in w:
-			im.set_pixel(sx, y, _shade(base, -0.07))               # creux du joint
-			im.set_pixel((sx + 1) % w, y, _shade(base, 0.05))      # arête éclairée
-		im.set_pixel((sx + 2) % w, 5, _shade(base, 0.13))          # rivet haut, épars
-		im.set_pixel((sx + 2) % w, w - 6, _shade(base, 0.13))      # rivet bas
-	for k in 5:                                     # éraflures horizontales discrètes
-		var sy := int(_h(k, 0, 96) * (w - 4)) + 2
-		var sx0 := int(_h(0, k, 97) * (w - 18))
-		for x in range(sx0, sx0 + 12):
-			im.set_pixel(x, sy, _shade(im.get_pixel(x, sy), -0.03))
-	return im
-
-# Paroi du fond : roche sombre désaturée. 48×48 (période de répétition longue) ;
-# strates rares et irrégulières (pas de bandes régulières → pas d'effet « blocs collés »).
-static func _build_bg_wall() -> Image:
-	var w := 48
-	var im := Image.create(w, w, false, Image.FORMAT_RGBA8)
-	var base := Color(0.13, 0.14, 0.17)
-	for y in w:
-		for x in w:
-			var c := _shade(base, (_h(x, y, 91) - 0.5) * 0.09)
-			if _h(x, y, 94) > 0.86:      # renfoncements sombres épars
-				c = _shade(c, -0.05)
-			im.set_pixel(x, y, c)
-	for sy: int in [13, 34]:             # 2 strates discrètes, à des hauteurs irrégulières
-		for x in w:
-			if _h(x, sy, 98) > 0.25:     # discontinues (pas une ligne pleine)
-				im.set_pixel(x, sy, _shade(im.get_pixel(x, sy), -0.045))
-	return im
-
-# Silhouettes d'infrastructure (transparent ailleurs) : étai vertical + traverse
-# + tuyau. Tuilé → colonnes de soutènement récurrentes. Garde l'alpha (≠ _shade).
-static func _build_bg_struct() -> Image:
-	var w := 48
-	var h := 64
-	var im := Image.create(w, h, false, Image.FORMAT_RGBA8)
-	im.fill(Color(0, 0, 0, 0))
-	var wood := Color(0.17, 0.14, 0.10, 0.88)
-	var wood_d := Color(0.10, 0.08, 0.05, 0.90)
-	var metal := Color(0.16, 0.17, 0.20, 0.85)
-	for y in h:                          # étai vertical (x 21..26) + arêtes sombres
-		for x in range(21, 27):
-			im.set_pixel(x, y, wood)
-		im.set_pixel(21, y, wood_d)
-		im.set_pixel(26, y, wood_d)
-		for x in range(6, 9):            # tuyau métallique (x 6..8)
-			im.set_pixel(x, y, metal)
-	for x in range(14, 34):              # traverse courte (≠ pleine largeur → pas de grille)
-		for y in range(10, 15):
-			im.set_pixel(x, y, wood)
-		im.set_pixel(x, 10, wood_d)
-		im.set_pixel(x, 14, wood_d)
-	for d in 6:                          # jambes de force diagonales (look charpente)
-		im.set_pixel(20 - d, 15 + d, wood)
-		im.set_pixel(27 + d, 15 + d, wood)
-	for bx in [18, 24, 30]:              # boulons sur la traverse
-		im.set_pixel(bx, 12, Color(0.30, 0.26, 0.18, 0.95))
-	for y in range(30, 33):              # joint du tuyau
-		for x in range(5, 10):
-			im.set_pixel(x, y, Color(0.22, 0.23, 0.26, 0.9))
-	return im
 
 # --- Outils ------------------------------------------------------------------
 # Hash déterministe 0..1 à partir de (x, y) et d'une graine (canal de bruit).
