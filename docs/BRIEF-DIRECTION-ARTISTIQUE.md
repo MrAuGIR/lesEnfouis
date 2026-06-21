@@ -22,7 +22,16 @@
 > [Le HUD](../concept-art/brief-concept-hud.md) ·
 > [Le décor de fond](../concept-art/brief-concept-decor-fond.md).
 >
-> 🎮 **Briefs de PRODUCTION (assets jouables) :** [Le Héros — sprites & anims](../concept-art/brief-prod-heros.md).
+> 🎮 **Briefs de PRODUCTION (assets jouables) :** [Le Héros](../concept-art/brief-prod-heros.md) ·
+> [Les blocs du monde — tileset 16 px](../concept-art/brief-prod-blocs-monde.md) ·
+> [Les robots](../concept-art/brief-prod-robots.md) ·
+> [Les pilleurs (humains)](../concept-art/brief-prod-pilleurs.md) ·
+> [Le boss — le Roi des Galeries](../concept-art/brief-prod-boss.md) ·
+> [Le HUD — habillage](../concept-art/brief-prod-hud.md).
+>
+> 📋 **Fiches d'intake remplies** (réponses au questionnaire technique du designer, + capture
+> in-game par lot) : héros · blocs-monde · blocs-décor · robots · pilleurs · boss · HUD
+> (`concept-art/intake-prod-*-rempli.md`).
 
 ## 1. Le projet en bref
 

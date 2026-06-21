@@ -73,7 +73,7 @@ func _draw() -> void:
 			if v <= 0.04:
 				continue
 			var fr := Rect2(tx * ts, ty * ts, ts, ts)
-			var tex := TileArt.tex(t)   # même texture que les blocs révélés, modulée par la lumière reçue
+			var tex := TileArt.tex_at(t, tx, ty)   # même variante que les blocs révélés, modulée par la lumière reçue
 			if tex != null:
 				draw_texture_rect(tex, fr, false, Color(1, 1, 1, v * 0.85))
 			else:
