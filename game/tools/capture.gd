@@ -79,6 +79,60 @@ func _ready() -> void:
 	await _save("/tmp/cap_decor_roche.png")
 	_clear_glows()
 
+	# ---- 5) HUD (interface en jeu, dans le hall) ----
+	main.marker.visible = true
+	main.hud.visible = true
+	main.hero.pos = Vector2((cx + 0.5) * T, (WorldGrid.BASE_DEPTH) * T - main.hero.half.y)
+	main.hero.aim = Vector2.RIGHT
+	_glow(Vector2((cx + 0.5) * T, (WorldGrid.BASE_DEPTH - 2) * T), Color(1.0, 0.86, 0.58), 3.0, 1.3)
+	await _save("/tmp/cap_hud.png")
+	_clear_glows()
+	main.hud.visible = false
+
+	# ---- 6) ROBOTS (KIND_ROBOT seul : la famille machine) ----
+	var Rb := WorldGrid.BASE_DEPTH + 46
+	_carve_room(cx - 7, cx + 5, Rb)
+	main.view.mark_dirty()
+	main.hero.pos = Vector2((cx - 5 + 0.5) * T, (Rb + 1) * T - main.hero.half.y)
+	main.hero.aim = Vector2.RIGHT
+	main.crew.list.clear()
+	main.crew._add_at(Vector2((cx - 1 + 0.5) * T, (Rb + 1) * T), EnemyCrew.KIND_ROBOT, false)
+	main.crew._add_at(Vector2((cx + 2 + 0.5) * T, (Rb + 1) * T), EnemyCrew.KIND_ROBOT, false)
+	_glow(Vector2((cx + 0.5) * T, (Rb - 1) * T), Color(0.95, 0.9, 0.82), 3.2, 1.5)
+	await _save("/tmp/cap_robots.png")
+	_clear_glows()
+	main.crew.list.clear()
+
+	# ---- 7) PILLEURS (humains : fonceur/tireur/lourd) ----
+	var Rp := WorldGrid.BASE_DEPTH + 54
+	_carve_room(cx - 8, cx + 6, Rp)
+	main.view.mark_dirty()
+	main.hero.pos = Vector2((cx - 7 + 0.5) * T, (Rp + 1) * T - main.hero.half.y)
+	main.hero.aim = Vector2.RIGHT
+	main.crew.list.clear()
+	main.crew._add_at(Vector2((cx - 3 + 0.5) * T, (Rp + 1) * T), EnemyCrew.KIND_FONCEUR, false)
+	main.crew._add_at(Vector2((cx + 0 + 0.5) * T, (Rp + 1) * T), EnemyCrew.KIND_TIREUR, false)
+	main.crew._add_at(Vector2((cx + 3 + 0.5) * T, (Rp + 1) * T), EnemyCrew.KIND_LOURD, false)
+	_glow(Vector2(cx * T, (Rp - 1) * T), Color(0.95, 0.9, 0.78), 3.4, 1.5)
+	await _save("/tmp/cap_pilleurs.png")
+	_clear_glows()
+	main.crew.list.clear()
+
+	# ---- 8) BOSS (le Roi des Galeries + 2 sbires, héros pour l'échelle) ----
+	var Rk := WorldGrid.BASE_DEPTH + 62
+	_carve_room(cx - 9, cx + 7, Rk)
+	main.view.mark_dirty()
+	main.hero.pos = Vector2((cx - 8 + 0.5) * T, (Rk + 1) * T - main.hero.half.y)
+	main.hero.aim = Vector2.RIGHT
+	main.crew.list.clear()
+	main.crew._add_at(Vector2((cx + 1 + 0.5) * T, (Rk + 1) * T), EnemyCrew.KIND_BOSS, false)
+	main.crew._add_at(Vector2((cx - 3 + 0.5) * T, (Rk + 1) * T), EnemyCrew.KIND_FONCEUR, false)
+	main.crew._add_at(Vector2((cx + 5 + 0.5) * T, (Rk + 1) * T), EnemyCrew.KIND_TIREUR, false)
+	_glow(Vector2(cx * T, (Rk - 1) * T), Color(0.96, 0.84, 0.7), 3.8, 1.6)
+	await _save("/tmp/cap_boss.png")
+	_clear_glows()
+	main.crew.list.clear()
+
 	print("CAPTURE OK")
 	get_tree().quit()
 
