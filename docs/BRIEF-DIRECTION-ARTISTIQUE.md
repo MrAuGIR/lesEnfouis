@@ -22,7 +22,10 @@
 > [Le HUD](../concept-art/brief-concept-hud.md) ·
 > [Le décor de fond](../concept-art/brief-concept-decor-fond.md).
 >
-> 🎮 **Briefs de PRODUCTION (assets jouables) :** [Le Héros — sprites & anims](../concept-art/brief-prod-heros.md).
+> 🎮 **Briefs de PRODUCTION (assets jouables) :** [Le Héros — sprites & anims](../concept-art/brief-prod-heros.md) ·
+> [Les blocs du monde — tileset 16 px](../concept-art/brief-prod-blocs-monde.md) ·
+> [Les ennemis — sprites & anims](../concept-art/brief-prod-ennemis.md) ·
+> [Le HUD — habillage](../concept-art/brief-prod-hud.md).
 
 ## 1. Le projet en bref
 
