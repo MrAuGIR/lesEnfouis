@@ -12,14 +12,36 @@ extends RefCounted
 
 const S := 16   # côté de la tuile (= WorldGrid.TILE)
 
+# Tuiles peintes par le designer (lot « tileset » v6, art/tileset/). Chaque type du
+# monde y a son PNG 16×16 ; les types ABSENTS de cette table retombent sur la
+# génération par code (_build) — rien ne casse si un asset manque.
+const TILE_PNG := {
+	WorldGrid.DIRT: "tile_dirt.png",
+	WorldGrid.ROCK: "tile_rock.png",
+	WorldGrid.WOOD: "tile_wood.png",
+	WorldGrid.LITHIUM: "tile_lithium.png",
+	WorldGrid.WALL: "tile_wall.png",
+	WorldGrid.HARDROCK: "tile_hardrock.png",
+	WorldGrid.LADDER: "tile_ladder.png",
+	WorldGrid.PASSERELLE: "tile_passerelle.png",
+	WorldGrid.IRON: "tile_iron.png",
+	WorldGrid.CRATE: "tile_crate.png",
+	WorldGrid.CRATE_OPEN: "tile_crate_open.png",
+	WorldGrid.BOSS_DOOR: "tile_boss_door.png",
+}
+
 static var _cache: Dictionary = {}
 
 # Texture du type de tuile t, ou null si non géré (l'appelant retombe sur l'aplat).
 static func tex(t: int) -> Texture2D:
 	if _cache.has(t):
 		return _cache[t]
-	var img := _build(t)
-	var tx: Texture2D = ImageTexture.create_from_image(img) if img != null else null
+	var tx: Texture2D = null
+	if TILE_PNG.has(t):
+		tx = load("res://art/tileset/" + TILE_PNG[t])   # asset designer (lot tileset v6)
+	if tx == null:                                       # repli : texture générée par code
+		var img := _build(t)
+		tx = ImageTexture.create_from_image(img) if img != null else null
 	_cache[t] = tx
 	return tx
 
