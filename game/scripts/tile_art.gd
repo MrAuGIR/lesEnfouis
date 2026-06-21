@@ -30,7 +30,27 @@ const TILE_PNG := {
 	WorldGrid.BOSS_DOOR: "tile_boss_door.png",
 }
 
-static var _cache: Dictionary = {}
+# Variantes de tuiles (lot v6) : pour casser la répétition sur les grandes surfaces.
+# Par type, une liste [fichier, poids] — le poids règle la fréquence (les accents
+# rares restent rares). La tuile de base est incluse. Tirage DÉTERMINISTE par cellule
+# (hash sur x,y) → stable d'un lancement à l'autre, pas de scintillement.
+const VARIANT_SEED := 17
+const TILE_VARIANTS := {
+	WorldGrid.ROCK: [["tile_rock.png", 4], ["tile_rock_a.png", 3], ["tile_rock_b.png", 3],
+		["tile_rock_c.png", 3], ["tile_rock_humid.png", 1], ["tile_rock_cracked.png", 1]],
+	WorldGrid.DIRT: [["tile_dirt.png", 4], ["tile_dirt_a.png", 3], ["tile_dirt_b.png", 3],
+		["tile_dirt_c.png", 3], ["tile_dirt_roots.png", 1]],
+}
+
+static var _cache: Dictionary = {}          # type → texture (PNG de base ou repli généré)
+static var _png_cache: Dictionary = {}      # nom de fichier → texture (partagé tex/tex_at)
+static var _vflat: Dictionary = {}          # type → liste de fichiers déjà dépliée par poids
+
+# Charge (et met en cache) une tuile PNG du lot designer.
+static func _png(filename: String) -> Texture2D:
+	if not _png_cache.has(filename):
+		_png_cache[filename] = load("res://art/tileset/" + filename)
+	return _png_cache[filename]
 
 # Texture du type de tuile t, ou null si non géré (l'appelant retombe sur l'aplat).
 static func tex(t: int) -> Texture2D:
@@ -38,12 +58,27 @@ static func tex(t: int) -> Texture2D:
 		return _cache[t]
 	var tx: Texture2D = null
 	if TILE_PNG.has(t):
-		tx = load("res://art/tileset/" + TILE_PNG[t])   # asset designer (lot tileset v6)
+		tx = _png(TILE_PNG[t])                           # asset designer (lot tileset v6)
 	if tx == null:                                       # repli : texture générée par code
 		var img := _build(t)
 		tx = ImageTexture.create_from_image(img) if img != null else null
 	_cache[t] = tx
 	return tx
+
+# Comme tex(), mais choisit une VARIANTE selon la cellule (x, y) si le type en a.
+# Les types sans variante retombent sur tex(t).
+static func tex_at(t: int, x: int, y: int) -> Texture2D:
+	if not TILE_VARIANTS.has(t):
+		return tex(t)
+	if not _vflat.has(t):                                # déplie [fichier, poids] une fois
+		var flat := []
+		for pair in TILE_VARIANTS[t]:
+			for i in int(pair[1]):
+				flat.append(pair[0])
+		_vflat[t] = flat
+	var flat: Array = _vflat[t]
+	var idx := mini(int(_h(x, y, VARIANT_SEED) * flat.size()), flat.size() - 1)
+	return _png(flat[idx])
 
 # --- Décor de fond (parallaxe) -----------------------------------------------
 # Couches en retrait derrière les tuiles, tuilées par world_view avec parallaxe.

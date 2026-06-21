@@ -170,7 +170,7 @@ func _draw() -> void:
 				continue
 			# Caisses [E] et portes du boss : désormais texturées (cf. TileArt),
 			# elles passent par la branche générique ci-dessous.
-			var tex := TileArt.tex(t)   # texture pixel-art (grain, minerais, biseau)
+			var tex := TileArt.tex_at(t, tx, ty)   # texture pixel-art (variante par cellule)
 			if tex != null:
 				draw_texture_rect(tex, rect, false)
 			else:
