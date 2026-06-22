@@ -131,6 +131,7 @@ func _cull() -> void:
 			alive.append(e)
 			continue
 		view.add_flash(Vector2i(int(e["pos"].x / ts), int(e["pos"].y / ts)), 0.3)
+		crew.add_corpse(e)   # mise en scène de la chute (anim mort, cf. world_view)
 		if audio != null:
 			audio.play("enemy_down", randf_range(0.92, 1.06))
 		# Porteur de raid abattu : son butin volé tombe au sol (récupérable).

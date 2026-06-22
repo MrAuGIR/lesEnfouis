@@ -19,6 +19,7 @@ var crew: EnemyCrew
 var pop: Population
 var caravan: Caravan
 var foyer: Foyer               # pour dessiner le fond des pièces de base à leur place
+var boss_fight: BossFight      # pour connaître l'anim du Roi (phase/enrage) — branché par main
 
 var _occluders: Array[LightOccluder2D] = []
 var _occ_center := Vector2i(-9999, -9999)
@@ -173,6 +174,52 @@ static func _enemy_color(kind: int) -> Color:
 		EnemyCrew.KIND_BOSS: return Color(0.48, 0.18, 0.26)      # pourpre du Roi
 	return Color(0.85, 0.30, 0.25)                               # robot
 
+# --- Sprites animés (pilleurs + Roi), cf. SpriteDB --------------------------------
+const ATK_SHOW := 0.4   # s d'affichage de l'anim d'attaque après son déclenchement
+
+# Horloge globale (s) pour les boucles d'anim (idle/marche…).
+func _clock() -> float:
+	return float(Time.get_ticks_msec()) / 1000.0
+
+# Anim courante d'un ennemi → {entity, anim, loop, age}. {} si pas de sprite (robot).
+# Dérivée des états déjà exposés (flash/hit_cd/shoot_cd/vel) — aucune IA touchée.
+func _actor_anim(e: Dictionary) -> Dictionary:
+	if e.get("boss", false):
+		if boss_fight == null:
+			return {}
+		var ba: String = boss_fight.anim_name()
+		return {"entity": "boss_roi", "anim": ba, "loop": SpriteDB.is_loop("boss_roi", ba),
+			"age": boss_fight.anim_age()}
+	var kind := int(e["kind"])
+	var entity := EnemyCrew.entity_name(kind)
+	if entity == "" or not SpriteDB.PIVOT.has(entity):
+		return {}
+	var anim := ""
+	var age := 0.0
+	if float(e["flash"]) > 0.0:
+		anim = "touche"
+	elif kind == EnemyCrew.KIND_TIREUR and float(e["shoot_cd"]) > EnemyCrew.SHOOT_CD - ATK_SHOW:
+		anim = "attaque_tir"
+		age = EnemyCrew.SHOOT_CD - float(e["shoot_cd"])
+	elif kind != EnemyCrew.KIND_TIREUR and float(e["hit_cd"]) > EnemyCrew.ENEMY_HIT_CD - ATK_SHOW:
+		anim = "attaque"
+		age = EnemyCrew.ENEMY_HIT_CD - float(e["hit_cd"])
+	else:
+		anim = "marche" if absf(float(e["vel"].x)) > 4.0 else "idle"
+	# Le Lourd : face ou dos selon son orientation par rapport au héros (dos = point faible).
+	if kind == EnemyCrew.KIND_LOURD and (anim == "idle" or anim == "marche"):
+		var facing_hero := signf(hero.pos.x - float(e["pos"].x)) == signf(float(e["dir"]))
+		anim = ("face_" if facing_hero else "dos_") + anim
+	return {"entity": entity, "anim": anim, "loop": SpriteDB.is_loop(entity, anim), "age": age}
+
+# Dessine une frame ancrée au PIVOT (pieds), flippée selon dir (sprites = regard à droite).
+func _blit_sprite(tex: Texture2D, entity: String, feet: Vector2, dir: float, flash: bool) -> void:
+	var piv := SpriteDB.pivot(entity)
+	var mod := Color(1.6, 1.5, 1.5) if flash else Color.WHITE
+	draw_set_transform(feet, 0.0, Vector2(-1.0 if dir < 0.0 else 1.0, 1.0))
+	draw_texture(tex, -piv, mod)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
 # Palette des blocs (partagée avec l'éclairage de face de marker_view.gd)
 static func tile_color(t: int) -> Color:
 	match t:
@@ -260,20 +307,30 @@ func _draw() -> void:
 	for c in light.torches:
 		var tc := Vector2(c.x * ts + ts * 0.5, c.y * ts + ts * 0.5)
 		draw_rect(Rect2(tc + Vector2(-2, -5), Vector2(4, 10)), Color(1.0, 0.75, 0.35))
+	# Cadavres (anim de mort) — sous les vivants, le temps de la chute
+	for c in crew.corpses:
+		var ctex := SpriteDB.frame_at(c["entity"], "mort", float(c["age"]))
+		if ctex != null:
+			_blit_sprite(ctex, c["entity"], Vector2(c["pos"]) + Vector2(0.0, Vector2(c["half"]).y),
+				float(c["dir"]), false)
 	# Ennemis (dans le noir : presque invisibles — leurs repères luisent, cf. marker_view)
+	# Sprites animés pour les pilleurs + le Roi ; les robots gardent le rect grey-box.
 	for e in crew.list:
 		var ep: Vector2 = e["pos"]
 		var eh: Vector2 = e["half"]
 		var kind := int(e["kind"])
-		var ecol := _enemy_color(kind)
-		if float(e["flash"]) > 0.0:
-			ecol = Color(1.0, 0.95, 0.95)
-		draw_rect(Rect2(ep - eh, eh * 2.0), ecol)
-		draw_rect(Rect2(ep - eh, eh * 2.0), Color(0, 0, 0, 0.5), false, 1.0)
-		if kind == EnemyCrew.KIND_LOURD:
-			# Plaque de blindage du côté qu'il regarde (le dos est le point faible)
-			var fx := ep.x + float(e["dir"]) * eh.x - (3.0 if float(e["dir"]) > 0.0 else 0.0)
-			draw_rect(Rect2(fx, ep.y - eh.y, 3.0, eh.y * 2.0), Color(0.22, 0.24, 0.30))
+		var info := _actor_anim(e)
+		if not info.is_empty():
+			var tex: Texture2D = SpriteDB.frame(info["entity"], info["anim"], _clock(), 0.0) \
+				if bool(info["loop"]) else SpriteDB.frame_at(info["entity"], info["anim"], float(info["age"]))
+			if tex != null:
+				_blit_sprite(tex, info["entity"], ep + Vector2(0.0, eh.y), float(e["dir"]), float(e["flash"]) > 0.0)
+		else:
+			var ecol := _enemy_color(kind)
+			if float(e["flash"]) > 0.0:
+				ecol = Color(1.0, 0.95, 0.95)
+			draw_rect(Rect2(ep - eh, eh * 2.0), ecol)
+			draw_rect(Rect2(ep - eh, eh * 2.0), Color(0, 0, 0, 0.5), false, 1.0)
 		if not (e.get("carry", {}) as Dictionary).is_empty():
 			# Porteur de raid chargé : le sac de butin sur le dos
 			var bx := ep.x - float(e["dir"]) * (eh.x + 2.0) - 2.5

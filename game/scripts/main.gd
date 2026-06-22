@@ -135,6 +135,7 @@ func _ready() -> void:
 	boss = BossFight.new(world, hero, crew, raids)
 	boss.mark_dirty = Callable(view, "mark_dirty")   # les portes sont des occulteurs
 	marker.boss = boss
+	view.boss_fight = boss   # pour le rendu animé du Roi (phase/enrage)
 	# Braseros du terminal du Roi : son antre rougeoie, on la repère de loin
 	var ba := world.boss_arena
 	for gx in [4, 14, 24]:

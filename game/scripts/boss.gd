@@ -40,6 +40,7 @@ const WAVE_SIZE := 3          # 2 fonceurs + 1 tireur
 const ENRAGE_AT := 0.5        # fraction de PV de la phase 2
 const ENRAGE_SPEED := 1.35
 const ENRAGE_DMG := 1.25
+const INVOKE_TIME := 0.6      # s : durée de la pose d'invocation (anim) sur appel de sbires
 const VENT_PERIOD := 3.4      # s du cycle d'un jet de vapeur (enrage)
 const VENT_WARN := 0.8        # s de sifflement avant le jet
 const VENT_ON := 1.0          # s de jet actif
@@ -73,6 +74,7 @@ var debris := []              # {"pos": Vector2, "warn": float} — chute après
 var vents := []               # {"cell": Vector2i, "t": float} — cycle local (enrage)
 var charge_pos := Vector2.ZERO  # où la charge de perçage est tombée
 var charge_taken := false
+var invoke_t := 0.0           # > 0 : le Roi tient sa pose d'invocation (rendu, world_view)
 
 func _init(w: WorldGrid, h: Hero, c: EnemyCrew, r: Raids) -> void:
 	world = w
@@ -185,7 +187,9 @@ func _run_fight(delta: float, msgs: Array) -> void:
 	if waves_done < WAVE_AT.size() and frac <= float(WAVE_AT[waves_done]):
 		waves_done += 1
 		_call_minions()
+		invoke_t = INVOKE_TIME
 		msgs.append("Le Roi appelle ses sbires : %d pilleurs debarquent !" % WAVE_SIZE)
+	invoke_t = maxf(0.0, invoke_t - delta)
 	boss["hit_cd"] = maxf(0.0, float(boss["hit_cd"]) - delta)
 	boss["flash"] = maxf(0.0, float(boss["flash"]) - delta)
 	phase_t -= delta
@@ -333,6 +337,7 @@ func _scatter_minions() -> void:
 func _win(msgs: Array) -> void:
 	state = ST_DEAD
 	charge_pos = Vector2(boss["pos"])
+	crew.add_corpse(boss, "boss_roi")   # mise en scène de la chute (anim mort)
 	crew.list.erase(boss)
 	boss = null
 	debris = []
@@ -361,7 +366,34 @@ func notify_hero_death() -> void:
 	waves_done = 0
 	phase = P_STALK
 	phase_t = 1.2
+	invoke_t = 0.0
 	if boss != null:
 		boss["hp"] = boss["max_hp"]
 		boss["pos"] = _feet_pos(world.boss_spawn, Vector2(boss["half"]))
 		boss["vel"] = Vector2.ZERO
+
+# --- Animation (lue par world_view) ----------------------------------------------------
+# Nom de l'anim courante du Roi selon sa phase de combat (cf. SpriteDB "boss_roi").
+func anim_name() -> String:
+	if boss == null:
+		return "idle"
+	if float(boss["flash"]) > 0.0:
+		return "touche"
+	if invoke_t > 0.0:
+		return "invocation"
+	match phase:
+		P_TELEGRAPH: return "telegraphe"
+		P_CHARGE: return "charge_enrage" if enraged else "charge"
+		P_RECOVER: return "slam"
+		_:
+			if absf(float(boss["vel"].x)) > 4.0:
+				return "marche"
+			return "idle_enrage" if enraged else "idle"
+
+# Âge (s) dans l'anim one-shot courante (slam/invocation) — 0 pour les boucles.
+func anim_age() -> float:
+	if invoke_t > 0.0:
+		return INVOKE_TIME - invoke_t
+	if phase == P_RECOVER:
+		return SLAM_RECOVER - phase_t
+	return 0.0
