@@ -34,6 +34,71 @@ func _bg_blit(tex: Texture2D, r: Rect2) -> void:
 	if tex != null and r.size.x > 0.0 and r.size.y > 0.0:
 		draw_texture_rect_region(tex, r, Rect2(r.position, r.size))
 
+const BG_PANEL := 128.0   # panneau de mur du Foyer (128 px = 8 tuiles), lot modulaire v8
+# Les props v8 sont exportés ~3× trop grands (échelle d'aperçu, relica de l'ancien
+# fond sur-zoomé) : un terminal de 88×80 px ≈ 5 tuiles alors qu'un objet posé à côté
+# d'un héros (≈1,75 tuile) doit faire ~1,5-2 tuiles. On les ramène à l'échelle monde
+# au dessin (non destructif, source PNG intacte). Ajuste ce facteur au visuel.
+const PROP_SCALE := 1.0 / 3.0
+# 1 prop focal par TYPE de pièce : [fichier, ancrage] (ancrage "sol" ou "mur").
+# Réglage purement déco — modifiable librement (ajustement au visuel).
+const ROOM_PROP := {
+	Foyer.ROOM_HALL: ["prop_terminal_01.png", "sol"],
+	Foyer.ROOM_ATELIER: ["prop_coffret_electrique_01.png", "mur"],
+	Foyer.ROOM_ENTREPOT: ["prop_etagere_chargee_01.png", "sol"],
+	Foyer.ROOM_DORTOIR: ["prop_affiche_01.png", "mur"],
+	Foyer.ROOM_INFIRMERIE: ["prop_lampe_murale_01.png", "mur"],
+	Foyer.ROOM_FORAGE: ["prop_ventilation_01.png", "mur"],
+	Foyer.ROOM_MINE: ["prop_ventilation_01.png", "mur"],
+	Foyer.ROOM_DEFENSE: ["prop_coffret_electrique_01.png", "mur"],
+}
+
+# Mur du Foyer : remplit r en panneaux 128 px, une VARIANTE par panneau (ancré monde).
+func _bg_base_blit(r: Rect2) -> void:
+	if r.size.x <= 0.0 or r.size.y <= 0.0:
+		return
+	var x := floorf(r.position.x / BG_PANEL) * BG_PANEL
+	while x < r.position.x + r.size.x:
+		var y := floorf(r.position.y / BG_PANEL) * BG_PANEL
+		while y < r.position.y + r.size.y:
+			var panel := Rect2(x, y, BG_PANEL, BG_PANEL)
+			var clip := r.intersection(panel)
+			if clip.size.x > 0.0 and clip.size.y > 0.0:
+				var tex := TileArt.bg_base_at(int(x / BG_PANEL), int(y / BG_PANEL))
+				if tex != null:
+					draw_texture_rect_region(tex, clip, Rect2(clip.position - panel.position, clip.size))
+			y += BG_PANEL
+		x += BG_PANEL
+
+# Pose le prop focal d'une pièce (au sol ou accroché au mur), décalé de la trappe
+# d'échelle centrale, clippé à la fenêtre. Dans la passe fond → éclairé par la lampe.
+func _draw_room_prop(mp: Vector2i, dest: Rect2) -> void:
+	var rt := int(foyer.rooms[mp]["type"])
+	if not ROOM_PROP.has(rt):
+		return
+	var spec: Array = ROOM_PROP[rt]
+	var tex: Texture2D = TileArt.prop(spec[0])
+	if tex == null:
+		return
+	var ts := float(WorldGrid.TILE)
+	var it: Rect2i = foyer.interior(mp)
+	var ix := it.position.x * ts
+	var iy := it.position.y * ts
+	var iw := it.size.x * ts
+	var ih := it.size.y * ts
+	var sz := tex.get_size() * PROP_SCALE    # ramené à l'échelle monde (cf. PROP_SCALE)
+	var px: float
+	var py: float
+	if spec[1] == "sol":
+		px = ix + iw * 0.62 - sz.x * 0.5    # décalé à droite de la trappe centrale
+		py = iy + ih - sz.y                 # pieds posés sur le sol intérieur
+	else:
+		px = ix + iw * 0.28 - sz.x * 0.5    # accroché en haut, à gauche du centre
+		py = iy + ts * 0.5                  # un peu sous le plafond
+	var r := Rect2(Vector2(roundf(px), roundf(py)), sz)
+	if dest.intersects(r):
+		draw_texture_rect(tex, r, false)
+
 func tick(_delta: float) -> void:
 	queue_redraw()
 	var c := Vector2i(int(hero.pos.x / WorldGrid.TILE), int(hero.pos.y / WorldGrid.TILE))
@@ -142,8 +207,10 @@ func _draw() -> void:
 	if foyer != null:                                                    # chaque pièce du Foyer
 		for mp in foyer.rooms:
 			var fr: Rect2i = foyer.footprint(mp)
-			_bg_blit(TileArt.bg_base(), dest.intersection(
+			_bg_base_blit(dest.intersection(
 				Rect2(fr.position.x * ts, fr.position.y * ts, fr.size.x * ts, fr.size.y * ts)))
+		for mp in foyer.rooms:                                              # props focaux par-dessus le mur
+			_draw_room_prop(mp, dest)
 	for tx in range(ptx - VIEW_RX, ptx + VIEW_RX):
 		var s := world.surface[clampi(tx, 0, WorldGrid.GRID_W - 1)]
 		if s > pty - VIEW_RY:
