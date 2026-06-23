@@ -793,11 +793,12 @@ func _update_hud() -> void:
 		obj = "Objectif : ramasse la CHARGE DE PERCAGE dans le terminal du Roi"
 
 	# Bandeau d'alerte (haut-centre, pulsé) : priorité au gaz, sinon raid en cours/imminent
-	var alert := {"text": "", "danger": false}
+	var alert := {"text": "", "danger": false, "kind": ""}
 	if not won and hero.in_gas() and not (hero.antipol_on and hero.antipol_fuel > 0.0):
-		alert = {"text": "!! GAZ TOXIQUE — active l'anti-gaz [M] !!", "danger": true}
+		alert = {"text": "!! GAZ TOXIQUE — active l'anti-gaz [M] !!", "danger": true, "kind": "gaz"}
 	elif raids.state == Raids.ST_ALERT or raids.state == Raids.ST_ACTIVE:
-		alert = {"text": raids.status_text(), "danger": true}
+		alert = {"text": raids.status_text(), "danger": true,
+			"kind": "raid_actif" if raids.state == Raids.ST_ACTIVE else "raid_alerte"}
 
 	# État du monde (haut-gauche)
 	var car_status := "ICI (%d s)" % maxi(0, int(caravan.stay_t)) if caravan.present else "dans %d s" % maxi(0, int(caravan.timer))

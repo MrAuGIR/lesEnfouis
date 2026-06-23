@@ -85,8 +85,6 @@ func tick(delta: float) -> void:
 # --- Dessin -------------------------------------------------------------------------
 const COL_TXT := Color(0.86, 0.90, 0.84)
 const COL_DIM := Color(0.62, 0.66, 0.62)
-const COL_PANEL := Color(0.08, 0.09, 0.12, 0.72)
-const COL_BORDER := Color(0.40, 0.44, 0.50, 0.85)
 
 # Jauges à segments (assets designer, lot HUD). Chaque jauge = une texture « pleine »
 # révélée par-dessus une texture « vide » (cadre + sockets éteints). Le cadre des deux
@@ -108,8 +106,48 @@ const TEX_LAMP_VIDE := preload("res://art/hud/hud_gauge_lamp_vide.png")
 const TEX_LAMP_LOW := preload("res://art/hud/hud_gauge_lamp_bas_full.png")
 const TEX_LAMP_LOW_VIDE := preload("res://art/hud/hud_gauge_lamp_bas_vide.png")
 
+# Cadres terminal (9-slice). Marge de slice = 8 px (cf. manifest designer).
+const PANEL_MARGIN := 8.0
+const TEX_PANEL := preload("res://art/hud/hud_panel_frame.png")
+const TEX_PROMPT := preload("res://art/hud/hud_prompt.png")
+
+# Bandeaux d'alerte : icône cuite à gauche (forme = repère danger non coloré) + boîte
+# de texte. 3-slice horizontal : gauche fixe (icône + bord), centre étiré, droite fixe.
+const BANNER_ML := 35.0   # zone gauche fixe (icône + bord de boîte)
+const BANNER_MR := 14.0   # zone droite fixe (bord)
+const BANNER_H := 32.0
+const TEX_BANNER := {
+	"gaz": preload("res://art/hud/hud_alert_banner_gaz.png"),
+	"raid_alerte": preload("res://art/hud/hud_alert_banner_raid_alerte.png"),
+	"raid_actif": preload("res://art/hud/hud_alert_banner_raid_actif.png"),
+}
+
+# Pastilles ressource (16×16, distinctes par la FORME — l'utilisateur est daltonien).
+const TEX_PIP := {
+	WorldGrid.ROCK: preload("res://art/hud/hud_pip_roche.png"),
+	WorldGrid.WOOD: preload("res://art/hud/hud_pip_bois.png"),
+	WorldGrid.LITHIUM: preload("res://art/hud/hud_pip_lithium.png"),
+	WorldGrid.IRON: preload("res://art/hud/hud_pip_fer.png"),
+}
+
 func _font() -> Font:
 	return ThemeDB.fallback_font
+
+# Cadre étirable (9-slice) dessiné en mode immédiat : coins fixes, bords/centre étirés.
+func _draw_frame(c: HudPanel, tex: Texture2D, rect: Rect2, ml: float, mr: float, mt: float, mb: float,
+		mod: Color = Color(1, 1, 1, 1)) -> void:
+	var ts := tex.get_size()
+	var sx := [0.0, ml, ts.x - mr, ts.x]
+	var sy := [0.0, mt, ts.y - mb, ts.y]
+	var dx := [rect.position.x, rect.position.x + ml, rect.end.x - mr, rect.end.x]
+	var dy := [rect.position.y, rect.position.y + mt, rect.end.y - mb, rect.end.y]
+	for i in 3:
+		for j in 3:
+			var dst := Rect2(dx[i], dy[j], dx[i + 1] - dx[i], dy[j + 1] - dy[j])
+			if dst.size.x <= 0.0 or dst.size.y <= 0.0:
+				continue
+			var src := Rect2(sx[i], sy[j], sx[i + 1] - sx[i], sy[j + 1] - sy[j])
+			c.draw_texture_rect_region(tex, dst, src, mod)
 
 func _draw_hud(c: HudPanel) -> void:
 	if state.is_empty():
@@ -123,8 +161,7 @@ func _draw_hud(c: HudPanel) -> void:
 	_draw_context(c, font, sz)
 
 func _panel_box(c: HudPanel, r: Rect2) -> void:
-	c.draw_rect(r, COL_PANEL)
-	c.draw_rect(r, COL_BORDER, false, 1.0)
+	_draw_frame(c, TEX_PANEL, r, PANEL_MARGIN, PANEL_MARGIN, PANEL_MARGIN, PANEL_MARGIN)
 
 # Haut-gauche : état du monde.
 func _draw_world_status(c: HudPanel, font: Font) -> void:
@@ -147,13 +184,15 @@ func _draw_objective(c: HudPanel, font: Font, sz: Vector2) -> void:
 	var alert: Dictionary = state.get("alert", {})
 	var atext := String(alert.get("text", ""))
 	if atext != "":
-		var pulse := 0.6 + 0.4 * sin(t_acc * 6.0)
-		var col: Color = Color(1.0, 0.35, 0.30, pulse) if bool(alert.get("danger", false)) else Color(1.0, 0.82, 0.40, pulse)
-		var aw := font.get_string_size(atext, HORIZONTAL_ALIGNMENT_LEFT, -1, 15).x
-		var br := Rect2((sz.x - aw) * 0.5 - 12, 32, aw + 24, 24)
-		c.draw_rect(br, Color(0.12, 0.04, 0.04, 0.6) if bool(alert.get("danger", false)) else Color(0.10, 0.08, 0.03, 0.6))
-		c.draw_rect(br, col, false, 1.5)
-		c.draw_string(font, Vector2((sz.x - aw) * 0.5, 49), atext, HORIZONTAL_ALIGNMENT_LEFT, -1, 15, col)
+		var tex: Texture2D = TEX_BANNER.get(String(alert.get("kind", "")), TEX_BANNER["raid_alerte"])
+		var tw := font.get_string_size(atext, HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x
+		var bw := BANNER_ML + tw + 10.0 + BANNER_MR
+		var bx := (sz.x - bw) * 0.5
+		var pulse := 0.7 + 0.3 * sin(t_acc * 6.0)   # le cadre pulse, le texte reste net
+		_draw_frame(c, tex, Rect2(bx, 32, bw, BANNER_H), BANNER_ML, BANNER_MR, PANEL_MARGIN, PANEL_MARGIN,
+			Color(1, 1, 1, pulse))
+		c.draw_string(font, Vector2(bx + BANNER_ML + 4.0, 52), atext, HORIZONTAL_ALIGNMENT_LEFT, -1, 12,
+			Color(1.0, 0.95, 0.9))
 
 # Droite : Sac + Stock (pastille couleur + NOM + nombre — texte toujours présent).
 func _draw_resources(c: HudPanel, font: Font, sz: Vector2) -> void:
@@ -175,13 +214,18 @@ func _draw_resources(c: HudPanel, font: Font, sz: Vector2) -> void:
 		y = _draw_res_row(c, font, x, y, int(t), int(stock.get(t, 0)))
 
 func _draw_res_row(c: HudPanel, font: Font, x: float, y: float, t: int, n: int) -> float:
-	# Pastille : carré coloré + liseré (forme/bordure = repère non coloré) ...
-	var sw := 11.0
-	c.draw_rect(Rect2(x, y - 9, sw, sw), Inventory.res_color(t))
-	c.draw_rect(Rect2(x, y - 9, sw, sw), Color(0.85, 0.87, 0.9, 0.8), false, 1.0)
+	# Pastille : icône distincte PAR LA FORME (daltonien) ; repli carré coloré si pas d'asset.
+	var dim := n <= 0
+	var pip: Texture2D = TEX_PIP.get(t, null)
+	if pip != null:
+		c.draw_texture(pip, Vector2(x, y - 13), Color(1, 1, 1, 0.45) if dim else Color(1, 1, 1, 1))
+	else:
+		var sw := 11.0
+		c.draw_rect(Rect2(x, y - 9, sw, sw), Inventory.res_color(t))
+		c.draw_rect(Rect2(x, y - 9, sw, sw), Color(0.85, 0.87, 0.9, 0.8), false, 1.0)
 	# ... + NOM + nombre (le texte porte l'info, indispensable en daltonien).
-	var col := COL_TXT if n > 0 else COL_DIM
-	c.draw_string(font, Vector2(x + sw + 6, y), "%s  %d" % [Inventory.res_name(t), n], HORIZONTAL_ALIGNMENT_LEFT, -1, 11, col)
+	var col := COL_DIM if dim else COL_TXT
+	c.draw_string(font, Vector2(x + 20, y), "%s  %d" % [Inventory.res_name(t), n], HORIZONTAL_ALIGNMENT_LEFT, -1, 11, col)
 	return y + 16.0
 
 # Bas-gauche : PV, lampe, arme / anti-gaz / outil.
@@ -230,11 +274,10 @@ func _draw_gauge(c: HudPanel, pos: Vector2, full: Texture2D, vide: Texture2D, fr
 func _draw_context(c: HudPanel, font: Font, sz: Vector2) -> void:
 	var ctx := String(state.get("context", ""))
 	if ctx != "":
-		var w := font.get_string_size(ctx, HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x
-		var r := Rect2((sz.x - w) * 0.5 - 12, sz.y - 58, w + 24, 24)
-		c.draw_rect(r, Color(0.06, 0.10, 0.08, 0.78))
-		c.draw_rect(r, Color(0.55, 0.85, 0.6, 0.9), false, 1.0)
-		c.draw_string(font, Vector2((sz.x - w) * 0.5, sz.y - 41), ctx, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(0.8, 0.97, 0.82))
+		var w := font.get_string_size(ctx, HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x
+		var r := Rect2((sz.x - w) * 0.5 - 14, sz.y - 60, w + 28, 24)
+		_draw_frame(c, TEX_PROMPT, r, PANEL_MARGIN, PANEL_MARGIN, PANEL_MARGIN, PANEL_MARGIN)
+		c.draw_string(font, Vector2((sz.x - w) * 0.5, sz.y - 44), ctx, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(0.8, 0.97, 0.82))
 	var help := String(state.get("controls", ""))
 	if help != "":
 		var hw := font.get_string_size(help, HORIZONTAL_ALIGNMENT_LEFT, -1, 9).x
