@@ -88,6 +88,26 @@ const COL_DIM := Color(0.62, 0.66, 0.62)
 const COL_PANEL := Color(0.08, 0.09, 0.12, 0.72)
 const COL_BORDER := Color(0.40, 0.44, 0.50, 0.85)
 
+# Jauges à segments (assets designer, lot HUD). Chaque jauge = une texture « pleine »
+# révélée par-dessus une texture « vide » (cadre + sockets éteints). Le cadre des deux
+# étant identique, il reste cohérent à tout niveau. États d'alerte = paire dédiée
+# (cadre cranté PV / brackets cassés lampe) + clignotement → l'info danger est doublée
+# par la FORME, pas seulement la couleur (l'utilisateur est daltonien).
+const GAUGE_SIZE := Vector2(96, 24)
+# Bord droit (en px texture) à révéler pour 1..10 segments allumés (snap pixel-exact).
+const GAUGE_SEG_EDGES: Array[int] = [14, 22, 30, 38, 46, 54, 62, 70, 78, 86]
+const HP_CRIT_FRAC := 0.30   # PV ≤ 30 % → jauge critique (cranté + pouls)
+const LAMP_LOW_FRAC := 0.25  # Lampe ≤ 25 % → jauge basse (brackets cassés + pouls)
+
+const TEX_HP := preload("res://art/hud/hud_gauge_hp.png")
+const TEX_HP_VIDE := preload("res://art/hud/hud_gauge_hp_vide.png")
+const TEX_HP_CRIT := preload("res://art/hud/hud_gauge_hp_critique_full.png")
+const TEX_HP_CRIT_VIDE := preload("res://art/hud/hud_gauge_hp_critique_vide.png")
+const TEX_LAMP := preload("res://art/hud/hud_gauge_lamp.png")
+const TEX_LAMP_VIDE := preload("res://art/hud/hud_gauge_lamp_vide.png")
+const TEX_LAMP_LOW := preload("res://art/hud/hud_gauge_lamp_bas_full.png")
+const TEX_LAMP_LOW_VIDE := preload("res://art/hud/hud_gauge_lamp_bas_vide.png")
+
 func _font() -> Font:
 	return ThemeDB.fallback_font
 
@@ -167,28 +187,44 @@ func _draw_res_row(c: HudPanel, font: Font, x: float, y: float, t: int, n: int) 
 # Bas-gauche : PV, lampe, arme / anti-gaz / outil.
 func _draw_survival(c: HudPanel, font: Font, sz: Vector2) -> void:
 	var x := 10.0
-	var y := sz.y - 74.0
-	_panel_box(c, Rect2(x - 2, y - 16, 304, 70))
+	var top := sz.y - 96.0
+	_panel_box(c, Rect2(x - 2, top - 6, 304, 96))
 	# PV
-	_draw_bar(c, font, x, y, "PV", float(state.get("hp", 0)) / maxf(1.0, float(state.get("hp_max", 1))),
-		Color(0.85, 0.30, 0.32), "%d/%d" % [int(state.get("hp", 0)), int(state.get("hp_max", 0))])
-	y += 18.0
+	var hp_frac := float(state.get("hp", 0)) / maxf(1.0, float(state.get("hp_max", 1)))
+	var hp_alert := hp_frac <= HP_CRIT_FRAC
+	_draw_gauge_row(c, font, x, top, "PV", hp_frac, hp_alert,
+		TEX_HP_CRIT if hp_alert else TEX_HP, TEX_HP_CRIT_VIDE if hp_alert else TEX_HP_VIDE,
+		"%d/%d" % [int(state.get("hp", 0)), int(state.get("hp_max", 0))])
 	# Lampe
-	_draw_bar(c, font, x, y, "Lampe", clampf(float(state.get("lamp", 0)), 0.0, 1.0),
-		Color(0.92, 0.82, 0.40), "%d%%" % int(float(state.get("lamp", 0)) * 100.0))
-	y += 18.0
-	c.draw_string(font, Vector2(x, y + 4), String(state.get("gear", "")), HORIZONTAL_ALIGNMENT_LEFT, 298, 11, COL_TXT)
+	var lamp_frac := clampf(float(state.get("lamp", 0)), 0.0, 1.0)
+	var lamp_alert := lamp_frac <= LAMP_LOW_FRAC
+	_draw_gauge_row(c, font, x, top + 28.0, "Lampe", lamp_frac, lamp_alert,
+		TEX_LAMP_LOW if lamp_alert else TEX_LAMP, TEX_LAMP_LOW_VIDE if lamp_alert else TEX_LAMP_VIDE,
+		"%d%%" % int(lamp_frac * 100.0))
+	# Équipement (arme / anti-gaz / outil / torches)
+	c.draw_string(font, Vector2(x, top + 70.0), String(state.get("gear", "")), HORIZONTAL_ALIGNMENT_LEFT, 298, 11, COL_TXT)
 
-func _draw_bar(c: HudPanel, font: Font, x: float, y: float, label: String, frac: float, fill: Color, value: String) -> void:
-	c.draw_string(font, Vector2(x, y), label, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, COL_DIM)
-	var bx := x + 44.0
-	var bw := 110.0
-	var bh := 10.0
-	var br := Rect2(bx, y - 9, bw, bh)
-	c.draw_rect(br, Color(0.05, 0.05, 0.07, 0.9))
-	c.draw_rect(Rect2(bx, y - 9, bw * clampf(frac, 0.0, 1.0), bh), fill)
-	c.draw_rect(br, COL_BORDER, false, 1.0)
-	c.draw_string(font, Vector2(bx + bw + 6, y), value, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, COL_TXT)
+# Une ligne de jauge : libellé + jauge à segments (texture) + valeur chiffrée.
+func _draw_gauge_row(c: HudPanel, font: Font, x: float, top: float, label: String,
+		frac: float, alert: bool, full: Texture2D, vide: Texture2D, value: String) -> void:
+	var baseline := top + 16.0  # texte centré verticalement sur la jauge (24 px)
+	c.draw_string(font, Vector2(x, baseline), label, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, COL_DIM)
+	var gx := x + 44.0
+	_draw_gauge(c, Vector2(gx, top), full, vide, frac, alert)
+	c.draw_string(font, Vector2(gx + GAUGE_SIZE.x + 6.0, baseline), value, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, COL_TXT)
+
+# Jauge à segments : « vide » dessous (cadre complet), puis on révèle N segments entiers
+# de la texture « pleine ». En alerte, les segments allumés pulsent (alpha).
+func _draw_gauge(c: HudPanel, pos: Vector2, full: Texture2D, vide: Texture2D, frac: float, alert: bool) -> void:
+	c.draw_texture(vide, pos)
+	var n := int(round(clampf(frac, 0.0, 1.0) * GAUGE_SEG_EDGES.size()))
+	if n <= 0:
+		return
+	var lit := Color(1, 1, 1, 1)
+	if alert:
+		lit.a = 0.4 + 0.6 * (0.5 + 0.5 * sin(t_acc * 8.0))  # pouls visible
+	var w := float(GAUGE_SEG_EDGES[n - 1])
+	c.draw_texture_rect_region(full, Rect2(pos, Vector2(w, GAUGE_SIZE.y)), Rect2(0, 0, w, GAUGE_SIZE.y), lit)
 
 # Bas-centre : invite contextuelle (« où agir ») + aide condensée.
 func _draw_context(c: HudPanel, font: Font, sz: Vector2) -> void:
