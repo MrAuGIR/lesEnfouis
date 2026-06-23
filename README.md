@@ -1,17 +1,27 @@
-# Les Enfouis *(The Buried)*
+<div align="center">
 
-> *« L'humanité s'est enterrée. À toi de remonter. »*
+# ⛏️ Les Enfouis
+#### *The Buried*
 
-Jeu de **survie, construction et exploration souterraine en 2D** (vue en coupe).
-Après l'apocalypse, l'humanité s'est enfouie sous terre. On dirige un survivant qui
-**creuse** le sol pour explorer, **récolte** des ressources, **affronte** humains et
-robots, et **bâtit** des bases façon *Fallout Shelter* — avec pour but de **remonter
-vers la surface**, de plus en plus dangereuse.
+***« L'humanité s'est enterrée. À toi de remonter. »***
 
-> 🚧 **État : MVP en grey-box.** Mécaniques jouables (creuser, bases & PNJ, caravane,
-> raids, boss, audio), formes simples — l'art final viendra dans une passe dédiée.
+Survie · construction · exploration souterraine en **2D, vue en coupe**
 
-Références d'ambiance : Minecraft (creuser) · Fallout Shelter (base/PNJ) · Metro 2033 (ton).
+[![Godot](https://img.shields.io/badge/Godot-4.6.3-478CBF?logo=godotengine&logoColor=white)](https://godotengine.org/download) [![GDScript](https://img.shields.io/badge/GDScript-pur,_z%C3%A9ro_build-355570?logo=godotengine&logoColor=white)](docs/DEVELOPPEUR.md) [![Licence](https://img.shields.io/badge/Licence-MIT-3fb950)](LICENSE) ![État](https://img.shields.io/badge/%C3%A9tat-MVP_jouable_%C2%B7_passe_pixel--art-e3742f)
+
+</div>
+
+---
+
+Après l'apocalypse, l'humanité s'est enfouie sous terre. Tu diriges un survivant qui **creuse** le
+sol pour explorer, **récolte** des ressources, **affronte** humains et robots, et **bâtit** des bases
+façon *Fallout Shelter* — avec un seul cap : **remonter vers la surface**, de plus en plus dangereuse.
+
+🎬 **Inspirations** — Minecraft *(creuser)* · Fallout Shelter *(base & PNJ)* · Metro 2033 *(ton)*
+
+> 🚧 **État : MVP jouable, passe pixel-art en cours.** Mécaniques complètes (creuser, bases & PNJ,
+> caravane, raids, boss, audio) ; l'art pixel est bien intégré (tileset, héros, ennemis, boss,
+> décors de fond, HUD terminal) — quelques lots et finitions restent à venir.
 
 ---
 
@@ -54,3 +64,13 @@ Les contributions sont les bienvenues. Avant de coder, lire le
 vérifier une modif, et les **contraintes du projet** (grey-box d'abord, lisibilité
 **non-colorée** car le porteur du projet est daltonien, claviers via touches physiques,
 langue française). Travailler sur une **branche** dédiée puis ouvrir une **Pull Request**.
+
+---
+
+## Licence
+
+Code distribué sous licence **[MIT](LICENSE)**.
+
+> ℹ️ Les **assets graphiques** (`game/art/`) ont été produits avec l'aide d'un outil de génération
+> par IA pendant la passe pixel-art. Leur statut juridique peut différer de celui du code ; en cas
+> de réutilisation des images, vérifie ce point de ton côté.
