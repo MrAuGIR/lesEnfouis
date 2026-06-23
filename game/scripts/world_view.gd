@@ -20,6 +20,7 @@ var pop: Population
 var caravan: Caravan
 var foyer: Foyer               # pour dessiner le fond des pièces de base à leur place
 var boss_fight: BossFight      # pour connaître l'anim du Roi (phase/enrage) — branché par main
+var combat: Combat             # pour connaître l'anim du héros (mêlée/tir) — branché par main
 
 var _occluders: Array[LightOccluder2D] = []
 var _occ_center := Vector2i(-9999, -9999)
@@ -220,6 +221,26 @@ func _blit_sprite(tex: Texture2D, entity: String, feet: Vector2, dir: float, fla
 	draw_texture(tex, -piv, mod)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
+# Anim courante du héros → {anim, loop, age}. Dérivée des états déjà exposés
+# (combat, creusage, échelle, vol, PV) — priorité du plus « fort » au plus calme.
+func _hero_anim() -> Dictionary:
+	if hero.hp <= 0.0:
+		return {"anim": "mort", "loop": false, "age": 1.0}
+	if hero.hurt_t > 0.0:
+		return {"anim": "touche", "loop": false, "age": 0.25 - hero.hurt_t}
+	if combat != null and combat.weapon == 0 and combat.atk_t > 0.0:
+		return {"anim": "attaque", "loop": false, "age": Combat.MELEE_CD - combat.atk_cd}
+	if combat != null and combat.weapon == 1 and combat.tracer_t > 0.0:
+		return {"anim": "tir", "loop": false, "age": Combat.GUN_CD - combat.gun_cd}
+	if hero.dig_active:
+		return {"anim": "creuse", "loop": true, "age": 0.0}
+	if hero.on_ladder():
+		return {"anim": "echelle", "loop": true, "age": 0.0}
+	if not hero.on_floor:
+		return {"anim": "saut", "loop": true, "age": 0.0}
+	var anim := "marche" if absf(hero.vel.x) > 4.0 else "idle"
+	return {"anim": anim, "loop": true, "age": 0.0}
+
 # Palette des blocs (partagée avec l'éclairage de face de marker_view.gd)
 static func tile_color(t: int) -> Color:
 	match t:
@@ -355,6 +376,13 @@ func _draw() -> void:
 	if caravan.present:
 		draw_rect(Rect2(caravan.pos - Vector2(7, 11), Vector2(14, 22)), Color(0.85, 0.65, 0.30))
 		draw_rect(Rect2(caravan.pos - Vector2(7, 11), Vector2(14, 22)), Color(0.3, 0.2, 0.08, 0.8), false, 1.0)
-	# Le héros (porteur de la lumière)
-	draw_rect(Rect2(hero.pos - hero.half, hero.half * 2.0), Color(0.95, 0.85, 0.5))
-	draw_rect(Rect2(hero.pos - hero.half, hero.half * 2.0), Color(0.2, 0.15, 0.05, 0.8), false, 1.0)
+	# Le héros (porteur de la lumière) — regard = direction de la lampe (visée souris)
+	var hinfo := _hero_anim()
+	var hdir := -1.0 if hero.aim.x < 0.0 else 1.0
+	var htex: Texture2D = SpriteDB.frame("hero", hinfo["anim"], _clock(), 0.0) \
+		if bool(hinfo["loop"]) else SpriteDB.frame_at("hero", hinfo["anim"], float(hinfo["age"]))
+	if htex != null:
+		_blit_sprite(htex, "hero", hero.pos + Vector2(0.0, hero.half.y), hdir, hero.hurt_t > 0.0)
+	else:
+		draw_rect(Rect2(hero.pos - hero.half, hero.half * 2.0), Color(0.95, 0.85, 0.5))
+		draw_rect(Rect2(hero.pos - hero.half, hero.half * 2.0), Color(0.2, 0.15, 0.05, 0.8), false, 1.0)

@@ -9,15 +9,25 @@ extends RefCounted
 
 # Pivot (px depuis le coin haut-gauche de la frame) par entité : x = milieu, y = pieds.
 const PIVOT := {
+	"hero": Vector2(16, 30),
 	"enemy_fonceur": Vector2(16, 30),
 	"enemy_tireur": Vector2(16, 30),
 	"enemy_lourd": Vector2(24, 46),
 	"boss_roi": Vector2(32, 60),
 }
 
+# Sous-dossier de res://art/ par entité (défaut : "enemies"). Le héros a sa propre
+# livraison (hero_sprites_production), rangée à part des pilleurs/boss.
+const ROOT := {"hero": "hero"}
+
 # entité -> { anim -> [nb_frames, fps, loop] }. loop=false → animation one-shot
 # (l'index suit une PROGRESSION 0→1 fournie par l'appelant : attaque/touché/mort).
 const ANIM := {
+	"hero": {
+		"idle": [3, 4, true], "marche": [6, 10, true], "saut": [4, 7, true],
+		"echelle": [4, 10, true], "creuse": [4, 12, true],
+		"tir": [3, 12, false], "attaque": [4, 12, false],
+		"touche": [2, 12, false], "mort": [5, 8, false]},
 	"enemy_fonceur": {
 		"idle": [2, 4, true], "marche": [4, 10, true], "attaque": [3, 12, false],
 		"touche": [1, 1, false], "mort": [3, 8, false]},
@@ -42,9 +52,10 @@ static func _frames(entity: String, anim: String) -> Array:
 	if _cache.has(key):
 		return _cache[key]
 	var n := int(ANIM[entity][anim][0])
+	var dir: String = ROOT.get(entity, "enemies")
 	var arr: Array = []
 	for i in range(1, n + 1):
-		arr.append(load("res://art/enemies/%s/%s_%s_%02d.png" % [entity, entity, anim, i]))
+		arr.append(load("res://art/%s/%s/%s_%s_%02d.png" % [dir, entity, entity, anim, i]))
 	_cache[key] = arr
 	return arr
 

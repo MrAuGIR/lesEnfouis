@@ -35,6 +35,8 @@ var antipol_fuel := 0.0           # secondes de protection anti-gaz restantes
 var antipol_on := false           # éclairage anti-pollution activé ?
 var was_in_gas := false           # pour signaler l'entrée dans la zone de gaz
 var drop_through := false         # [S] enfoncé : traverse les croisements échelle/passerelle
+var dig_active := false           # creuse une tuile CETTE frame (piloté par main → anim « creuse »)
+var hurt_t := 0.0                 # fenêtre d'anim « touche » (s) après une chute de PV nette
 
 func _init(w: WorldGrid) -> void:
 	world = w
@@ -93,6 +95,7 @@ func update_gas(delta: float) -> String:
 
 # Avance d'un pas de physique. controls=false fige les commandes (inventaire ouvert…).
 func move(delta: float, controls: bool) -> void:
+	hurt_t = maxf(0.0, hurt_t - delta)
 	var dir := 0.0
 	if controls and (Input.is_physical_key_pressed(KEY_A) or Input.is_key_pressed(KEY_LEFT)):
 		dir -= 1.0
