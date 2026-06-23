@@ -39,6 +39,27 @@ var light: LightField
 var hero: Hero
 var list := []
 var shots := []                  # traceurs des tirs ennemis : {a, b: Vector2, t: float}
+var corpses := []                # cadavres jouant l'anim de mort : {entity, pos, dir, half, age, ttl}
+
+const CORPSE_HOLD := 0.5         # s : la dernière frame de mort reste affichée avant de disparaître
+
+# kind -> dossier de sprites (SpriteDB) ; "" = pas de sprite (robot : rendu en rect).
+static func entity_name(kind: int) -> String:
+	match kind:
+		KIND_FONCEUR: return "enemy_fonceur"
+		KIND_TIREUR: return "enemy_tireur"
+		KIND_LOURD: return "enemy_lourd"
+		KIND_BOSS: return "boss_roi"
+	return ""
+
+# Met en scène la chute d'un ennemi abattu (appelé par combat._cull / boss._win).
+func add_corpse(e: Dictionary, entity := "") -> void:
+	if entity == "":
+		entity = entity_name(int(e["kind"]))
+	if entity == "":
+		return   # robot : pas d'anim de mort, rien à afficher
+	corpses.append({"entity": entity, "pos": Vector2(e["pos"]), "dir": float(e["dir"]),
+		"half": Vector2(e["half"]), "age": 0.0, "ttl": SpriteDB.dur(entity, "mort") + CORPSE_HOLD})
 
 func _init(w: WorldGrid, l: LightField, h: Hero) -> void:
 	world = w
@@ -137,6 +158,9 @@ func update(delta: float) -> void:
 	for s in shots:
 		s.t -= delta
 	shots = shots.filter(func(s): return s.t > 0.0)
+	for c in corpses:
+		c["age"] = float(c["age"]) + delta
+	corpses = corpses.filter(func(c): return float(c["age"]) < float(c["ttl"]))
 	for e in list:
 		if e.get("raid", false) or e.get("boss", false):
 			continue   # assaillants de raid → raids.gd ; le Roi → boss.gd

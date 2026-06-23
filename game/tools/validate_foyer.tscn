@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://valfoyertoolsecret0"]
+
+[ext_resource type="Script" path="res://tools/validate_foyer.gd" id="1_valf"]
+
+[node name="ValidateFoyer" type="Node2D"]
+script = ExtResource("1_valf")

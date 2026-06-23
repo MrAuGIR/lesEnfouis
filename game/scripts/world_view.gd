@@ -19,6 +19,8 @@ var crew: EnemyCrew
 var pop: Population
 var caravan: Caravan
 var foyer: Foyer               # pour dessiner le fond des pièces de base à leur place
+var boss_fight: BossFight      # pour connaître l'anim du Roi (phase/enrage) — branché par main
+var combat: Combat             # pour connaître l'anim du héros (mêlée/tir) — branché par main
 
 var _occluders: Array[LightOccluder2D] = []
 var _occ_center := Vector2i(-9999, -9999)
@@ -33,6 +35,71 @@ func _ready() -> void:
 func _bg_blit(tex: Texture2D, r: Rect2) -> void:
 	if tex != null and r.size.x > 0.0 and r.size.y > 0.0:
 		draw_texture_rect_region(tex, r, Rect2(r.position, r.size))
+
+const BG_PANEL := 128.0   # panneau de mur du Foyer (128 px = 8 tuiles), lot modulaire v8
+# Les props v8 sont exportés ~3× trop grands (échelle d'aperçu, relica de l'ancien
+# fond sur-zoomé) : un terminal de 88×80 px ≈ 5 tuiles alors qu'un objet posé à côté
+# d'un héros (≈1,75 tuile) doit faire ~1,5-2 tuiles. On les ramène à l'échelle monde
+# au dessin (non destructif, source PNG intacte). Ajuste ce facteur au visuel.
+const PROP_SCALE := 1.0 / 3.0
+# 1 prop focal par TYPE de pièce : [fichier, ancrage] (ancrage "sol" ou "mur").
+# Réglage purement déco — modifiable librement (ajustement au visuel).
+const ROOM_PROP := {
+	Foyer.ROOM_HALL: ["prop_terminal_01.png", "sol"],
+	Foyer.ROOM_ATELIER: ["prop_coffret_electrique_01.png", "mur"],
+	Foyer.ROOM_ENTREPOT: ["prop_etagere_chargee_01.png", "sol"],
+	Foyer.ROOM_DORTOIR: ["prop_affiche_01.png", "mur"],
+	Foyer.ROOM_INFIRMERIE: ["prop_lampe_murale_01.png", "mur"],
+	Foyer.ROOM_FORAGE: ["prop_ventilation_01.png", "mur"],
+	Foyer.ROOM_MINE: ["prop_ventilation_01.png", "mur"],
+	Foyer.ROOM_DEFENSE: ["prop_coffret_electrique_01.png", "mur"],
+}
+
+# Mur du Foyer : remplit r en panneaux 128 px, une VARIANTE par panneau (ancré monde).
+func _bg_base_blit(r: Rect2) -> void:
+	if r.size.x <= 0.0 or r.size.y <= 0.0:
+		return
+	var x := floorf(r.position.x / BG_PANEL) * BG_PANEL
+	while x < r.position.x + r.size.x:
+		var y := floorf(r.position.y / BG_PANEL) * BG_PANEL
+		while y < r.position.y + r.size.y:
+			var panel := Rect2(x, y, BG_PANEL, BG_PANEL)
+			var clip := r.intersection(panel)
+			if clip.size.x > 0.0 and clip.size.y > 0.0:
+				var tex := TileArt.bg_base_at(int(x / BG_PANEL), int(y / BG_PANEL))
+				if tex != null:
+					draw_texture_rect_region(tex, clip, Rect2(clip.position - panel.position, clip.size))
+			y += BG_PANEL
+		x += BG_PANEL
+
+# Pose le prop focal d'une pièce (au sol ou accroché au mur), décalé de la trappe
+# d'échelle centrale, clippé à la fenêtre. Dans la passe fond → éclairé par la lampe.
+func _draw_room_prop(mp: Vector2i, dest: Rect2) -> void:
+	var rt := int(foyer.rooms[mp]["type"])
+	if not ROOM_PROP.has(rt):
+		return
+	var spec: Array = ROOM_PROP[rt]
+	var tex: Texture2D = TileArt.prop(spec[0])
+	if tex == null:
+		return
+	var ts := float(WorldGrid.TILE)
+	var it: Rect2i = foyer.interior(mp)
+	var ix := it.position.x * ts
+	var iy := it.position.y * ts
+	var iw := it.size.x * ts
+	var ih := it.size.y * ts
+	var sz := tex.get_size() * PROP_SCALE    # ramené à l'échelle monde (cf. PROP_SCALE)
+	var px: float
+	var py: float
+	if spec[1] == "sol":
+		px = ix + iw * 0.62 - sz.x * 0.5    # décalé à droite de la trappe centrale
+		py = iy + ih - sz.y                 # pieds posés sur le sol intérieur
+	else:
+		px = ix + iw * 0.28 - sz.x * 0.5    # accroché en haut, à gauche du centre
+		py = iy + ts * 0.5                  # un peu sous le plafond
+	var r := Rect2(Vector2(roundf(px), roundf(py)), sz)
+	if dest.intersects(r):
+		draw_texture_rect(tex, r, false)
 
 func tick(_delta: float) -> void:
 	queue_redraw()
@@ -108,6 +175,72 @@ static func _enemy_color(kind: int) -> Color:
 		EnemyCrew.KIND_BOSS: return Color(0.48, 0.18, 0.26)      # pourpre du Roi
 	return Color(0.85, 0.30, 0.25)                               # robot
 
+# --- Sprites animés (pilleurs + Roi), cf. SpriteDB --------------------------------
+const ATK_SHOW := 0.4   # s d'affichage de l'anim d'attaque après son déclenchement
+
+# Horloge globale (s) pour les boucles d'anim (idle/marche…).
+func _clock() -> float:
+	return float(Time.get_ticks_msec()) / 1000.0
+
+# Anim courante d'un ennemi → {entity, anim, loop, age}. {} si pas de sprite (robot).
+# Dérivée des états déjà exposés (flash/hit_cd/shoot_cd/vel) — aucune IA touchée.
+func _actor_anim(e: Dictionary) -> Dictionary:
+	if e.get("boss", false):
+		if boss_fight == null:
+			return {}
+		var ba: String = boss_fight.anim_name()
+		return {"entity": "boss_roi", "anim": ba, "loop": SpriteDB.is_loop("boss_roi", ba),
+			"age": boss_fight.anim_age()}
+	var kind := int(e["kind"])
+	var entity := EnemyCrew.entity_name(kind)
+	if entity == "" or not SpriteDB.PIVOT.has(entity):
+		return {}
+	var anim := ""
+	var age := 0.0
+	if float(e["flash"]) > 0.0:
+		anim = "touche"
+	elif kind == EnemyCrew.KIND_TIREUR and float(e["shoot_cd"]) > EnemyCrew.SHOOT_CD - ATK_SHOW:
+		anim = "attaque_tir"
+		age = EnemyCrew.SHOOT_CD - float(e["shoot_cd"])
+	elif kind != EnemyCrew.KIND_TIREUR and float(e["hit_cd"]) > EnemyCrew.ENEMY_HIT_CD - ATK_SHOW:
+		anim = "attaque"
+		age = EnemyCrew.ENEMY_HIT_CD - float(e["hit_cd"])
+	else:
+		anim = "marche" if absf(float(e["vel"].x)) > 4.0 else "idle"
+	# Le Lourd : face ou dos selon son orientation par rapport au héros (dos = point faible).
+	if kind == EnemyCrew.KIND_LOURD and (anim == "idle" or anim == "marche"):
+		var facing_hero := signf(hero.pos.x - float(e["pos"].x)) == signf(float(e["dir"]))
+		anim = ("face_" if facing_hero else "dos_") + anim
+	return {"entity": entity, "anim": anim, "loop": SpriteDB.is_loop(entity, anim), "age": age}
+
+# Dessine une frame ancrée au PIVOT (pieds), flippée selon dir (sprites = regard à droite).
+func _blit_sprite(tex: Texture2D, entity: String, feet: Vector2, dir: float, flash: bool) -> void:
+	var piv := SpriteDB.pivot(entity)
+	var mod := Color(1.6, 1.5, 1.5) if flash else Color.WHITE
+	draw_set_transform(feet, 0.0, Vector2(-1.0 if dir < 0.0 else 1.0, 1.0))
+	draw_texture(tex, -piv, mod)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+# Anim courante du héros → {anim, loop, age}. Dérivée des états déjà exposés
+# (combat, creusage, échelle, vol, PV) — priorité du plus « fort » au plus calme.
+func _hero_anim() -> Dictionary:
+	if hero.hp <= 0.0:
+		return {"anim": "mort", "loop": false, "age": 1.0}
+	if hero.hurt_t > 0.0:
+		return {"anim": "touche", "loop": false, "age": 0.25 - hero.hurt_t}
+	if combat != null and combat.weapon == 0 and combat.atk_t > 0.0:
+		return {"anim": "attaque", "loop": false, "age": Combat.MELEE_CD - combat.atk_cd}
+	if combat != null and combat.weapon == 1 and combat.tracer_t > 0.0:
+		return {"anim": "tir", "loop": false, "age": Combat.GUN_CD - combat.gun_cd}
+	if hero.dig_active:
+		return {"anim": "creuse", "loop": true, "age": 0.0}
+	if hero.on_ladder():
+		return {"anim": "echelle", "loop": true, "age": 0.0}
+	if not hero.on_floor:
+		return {"anim": "saut", "loop": true, "age": 0.0}
+	var anim := "marche" if absf(hero.vel.x) > 4.0 else "idle"
+	return {"anim": anim, "loop": true, "age": 0.0}
+
 # Palette des blocs (partagée avec l'éclairage de face de marker_view.gd)
 static func tile_color(t: int) -> Color:
 	match t:
@@ -142,8 +275,10 @@ func _draw() -> void:
 	if foyer != null:                                                    # chaque pièce du Foyer
 		for mp in foyer.rooms:
 			var fr: Rect2i = foyer.footprint(mp)
-			_bg_blit(TileArt.bg_base(), dest.intersection(
+			_bg_base_blit(dest.intersection(
 				Rect2(fr.position.x * ts, fr.position.y * ts, fr.size.x * ts, fr.size.y * ts)))
+		for mp in foyer.rooms:                                              # props focaux par-dessus le mur
+			_draw_room_prop(mp, dest)
 	for tx in range(ptx - VIEW_RX, ptx + VIEW_RX):
 		var s := world.surface[clampi(tx, 0, WorldGrid.GRID_W - 1)]
 		if s > pty - VIEW_RY:
@@ -193,20 +328,30 @@ func _draw() -> void:
 	for c in light.torches:
 		var tc := Vector2(c.x * ts + ts * 0.5, c.y * ts + ts * 0.5)
 		draw_rect(Rect2(tc + Vector2(-2, -5), Vector2(4, 10)), Color(1.0, 0.75, 0.35))
+	# Cadavres (anim de mort) — sous les vivants, le temps de la chute
+	for c in crew.corpses:
+		var ctex := SpriteDB.frame_at(c["entity"], "mort", float(c["age"]))
+		if ctex != null:
+			_blit_sprite(ctex, c["entity"], Vector2(c["pos"]) + Vector2(0.0, Vector2(c["half"]).y),
+				float(c["dir"]), false)
 	# Ennemis (dans le noir : presque invisibles — leurs repères luisent, cf. marker_view)
+	# Sprites animés pour les pilleurs + le Roi ; les robots gardent le rect grey-box.
 	for e in crew.list:
 		var ep: Vector2 = e["pos"]
 		var eh: Vector2 = e["half"]
 		var kind := int(e["kind"])
-		var ecol := _enemy_color(kind)
-		if float(e["flash"]) > 0.0:
-			ecol = Color(1.0, 0.95, 0.95)
-		draw_rect(Rect2(ep - eh, eh * 2.0), ecol)
-		draw_rect(Rect2(ep - eh, eh * 2.0), Color(0, 0, 0, 0.5), false, 1.0)
-		if kind == EnemyCrew.KIND_LOURD:
-			# Plaque de blindage du côté qu'il regarde (le dos est le point faible)
-			var fx := ep.x + float(e["dir"]) * eh.x - (3.0 if float(e["dir"]) > 0.0 else 0.0)
-			draw_rect(Rect2(fx, ep.y - eh.y, 3.0, eh.y * 2.0), Color(0.22, 0.24, 0.30))
+		var info := _actor_anim(e)
+		if not info.is_empty():
+			var tex: Texture2D = SpriteDB.frame(info["entity"], info["anim"], _clock(), 0.0) \
+				if bool(info["loop"]) else SpriteDB.frame_at(info["entity"], info["anim"], float(info["age"]))
+			if tex != null:
+				_blit_sprite(tex, info["entity"], ep + Vector2(0.0, eh.y), float(e["dir"]), float(e["flash"]) > 0.0)
+		else:
+			var ecol := _enemy_color(kind)
+			if float(e["flash"]) > 0.0:
+				ecol = Color(1.0, 0.95, 0.95)
+			draw_rect(Rect2(ep - eh, eh * 2.0), ecol)
+			draw_rect(Rect2(ep - eh, eh * 2.0), Color(0, 0, 0, 0.5), false, 1.0)
 		if not (e.get("carry", {}) as Dictionary).is_empty():
 			# Porteur de raid chargé : le sac de butin sur le dos
 			var bx := ep.x - float(e["dir"]) * (eh.x + 2.0) - 2.5
@@ -231,6 +376,13 @@ func _draw() -> void:
 	if caravan.present:
 		draw_rect(Rect2(caravan.pos - Vector2(7, 11), Vector2(14, 22)), Color(0.85, 0.65, 0.30))
 		draw_rect(Rect2(caravan.pos - Vector2(7, 11), Vector2(14, 22)), Color(0.3, 0.2, 0.08, 0.8), false, 1.0)
-	# Le héros (porteur de la lumière)
-	draw_rect(Rect2(hero.pos - hero.half, hero.half * 2.0), Color(0.95, 0.85, 0.5))
-	draw_rect(Rect2(hero.pos - hero.half, hero.half * 2.0), Color(0.2, 0.15, 0.05, 0.8), false, 1.0)
+	# Le héros (porteur de la lumière) — regard = direction de la lampe (visée souris)
+	var hinfo := _hero_anim()
+	var hdir := -1.0 if hero.aim.x < 0.0 else 1.0
+	var htex: Texture2D = SpriteDB.frame("hero", hinfo["anim"], _clock(), 0.0) \
+		if bool(hinfo["loop"]) else SpriteDB.frame_at("hero", hinfo["anim"], float(hinfo["age"]))
+	if htex != null:
+		_blit_sprite(htex, "hero", hero.pos + Vector2(0.0, hero.half.y), hdir, hero.hurt_t > 0.0)
+	else:
+		draw_rect(Rect2(hero.pos - hero.half, hero.half * 2.0), Color(0.95, 0.85, 0.5))
+		draw_rect(Rect2(hero.pos - hero.half, hero.half * 2.0), Color(0.2, 0.15, 0.05, 0.8), false, 1.0)

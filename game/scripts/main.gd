@@ -135,6 +135,8 @@ func _ready() -> void:
 	boss = BossFight.new(world, hero, crew, raids)
 	boss.mark_dirty = Callable(view, "mark_dirty")   # les portes sont des occulteurs
 	marker.boss = boss
+	view.boss_fight = boss   # pour le rendu animé du Roi (phase/enrage)
+	view.combat = combat     # pour l'anim du héros (mêlée / tir)
 	# Braseros du terminal du Roi : son antre rougeoie, on la repère de loin
 	var ba := world.boss_arena
 	for gx in [4, 14, 24]:
@@ -309,6 +311,7 @@ func _audio_alerts() -> void:
 	# Héros touché : chute de PV nette d'un tick à l'autre (ignore l'érosion du gaz).
 	if hero.hp < _prev_hp - 2.0:
 		_sfx("hurt")
+		hero.hurt_t = 0.25   # déclenche l'anim « touche » (cf. world_view)
 	if hero.hp / Hero.MAX_HP < 0.30 and _prev_hp / Hero.MAX_HP >= 0.30:
 		_sfx("alert_lowhp")
 	_prev_hp = hero.hp
@@ -740,12 +743,14 @@ func _handle_dig(delta: float) -> void:
 		return
 	marker.dig_target = dig_target
 	marker.dig_frac = dig_progress / need
+	hero.dig_active = true
 
 func _reset_dig() -> void:
 	dig_target = Vector2i(-1, -1)
 	dig_progress = 0.0
 	marker.dig_target = dig_target
 	marker.dig_frac = 0.0
+	hero.dig_active = false
 
 func _dig_need(tx: int, ty: int) -> float:
 	return DIG_TIME * DIG_TIERS[dig_level] * world.dig_mult(world.tile(tx, ty))
@@ -788,11 +793,12 @@ func _update_hud() -> void:
 		obj = "Objectif : ramasse la CHARGE DE PERCAGE dans le terminal du Roi"
 
 	# Bandeau d'alerte (haut-centre, pulsé) : priorité au gaz, sinon raid en cours/imminent
-	var alert := {"text": "", "danger": false}
+	var alert := {"text": "", "danger": false, "kind": ""}
 	if not won and hero.in_gas() and not (hero.antipol_on and hero.antipol_fuel > 0.0):
-		alert = {"text": "!! GAZ TOXIQUE — active l'anti-gaz [M] !!", "danger": true}
+		alert = {"text": "!! GAZ TOXIQUE — active l'anti-gaz [M] !!", "danger": true, "kind": "gaz"}
 	elif raids.state == Raids.ST_ALERT or raids.state == Raids.ST_ACTIVE:
-		alert = {"text": raids.status_text(), "danger": true}
+		alert = {"text": raids.status_text(), "danger": true,
+			"kind": "raid_actif" if raids.state == Raids.ST_ACTIVE else "raid_alerte"}
 
 	# État du monde (haut-gauche)
 	var car_status := "ICI (%d s)" % maxi(0, int(caravan.stay_t)) if caravan.present else "dans %d s" % maxi(0, int(caravan.timer))

@@ -110,6 +110,29 @@ static func bg_base() -> Texture2D:
 		_bg_base = load("res://art/decor/bg_base.png")
 	return _bg_base
 
+# --- Foyer / base (lot modulaire v8, art/foyer/) -----------------------------
+# Mur du Foyer en 4 PANNEAUX modulaires 128×128 (a/b/c/d) : on en pioche un par
+# panneau (hash de la cellule de panneau) → motifs dispersés, pas de grille répétée.
+const BG_BASE_SEED := 41
+const BG_BASE_FILES := ["bg_base_tile_a.png", "bg_base_tile_b.png",
+	"bg_base_tile_c.png", "bg_base_tile_d.png"]
+static var _bg_base_var: Array = []
+
+static func bg_base_at(px: int, py: int) -> Texture2D:
+	if _bg_base_var.is_empty():
+		for f in BG_BASE_FILES:
+			_bg_base_var.append(load("res://art/foyer/" + f))
+	var idx := mini(int(_h(px, py, BG_BASE_SEED) * _bg_base_var.size()), _bg_base_var.size() - 1)
+	return _bg_base_var[idx]
+
+# Props focaux du Foyer (terminal, lampe, étagère…), PNG RGBA transparents posés
+# par world_view dans les pièces. Chargés/caches à la demande par nom de fichier.
+static var _prop_cache: Dictionary = {}
+static func prop(filename: String) -> Texture2D:
+	if not _prop_cache.has(filename):
+		_prop_cache[filename] = load("res://art/foyer/" + filename)
+	return _prop_cache[filename]
+
 # --- Outils ------------------------------------------------------------------
 # Hash déterministe 0..1 à partir de (x, y) et d'une graine (canal de bruit).
 static func _h(x: int, y: int, s: int) -> float:
