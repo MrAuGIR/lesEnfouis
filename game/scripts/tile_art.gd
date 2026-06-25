@@ -94,6 +94,19 @@ static func bg_roche() -> Texture2D:
 		_bg_roche = load("res://art/decor/bg_roche.png")
 	return _bg_roche
 
+# Paroi de roche en 3 VARIANTES 256² (designer, lot caverne) : on en pioche une par
+# panneau (hash de la cellule de 256 px) → motifs dispersés, pas de tuile unique répétée.
+const BG_ROCHE_SEED := 53
+const BG_ROCHE_FILES := ["bg_roche.png", "bg_roche_var1.png", "bg_roche_var2.png"]
+static var _bg_roche_var: Array = []
+
+static func bg_roche_at(px: int, py: int) -> Texture2D:
+	if _bg_roche_var.is_empty():
+		for f in BG_ROCHE_FILES:
+			_bg_roche_var.append(load("res://art/decor/" + f))
+	var idx := mini(int(_h(px, py, BG_ROCHE_SEED) * _bg_roche_var.size()), _bg_roche_var.size() - 1)
+	return _bg_roche_var[idx]
+
 static func bg_tunnel_paroi() -> Texture2D:
 	if _bg_tunnel_paroi == null:
 		_bg_tunnel_paroi = load("res://art/decor/bg_tunnel_paroi.png")
@@ -132,6 +145,14 @@ static func prop(filename: String) -> Texture2D:
 	if not _prop_cache.has(filename):
 		_prop_cache[filename] = load("res://art/foyer/" + filename)
 	return _prop_cache[filename]
+
+# Props de CAVERNE (stalactites, racines, gravats, cristaux, tuyaux…), PNG RGBA
+# transparents semés par world_view dans les zones creusées (art/caverne/).
+static var _cav_prop_cache: Dictionary = {}
+static func caverne_prop(filename: String) -> Texture2D:
+	if not _cav_prop_cache.has(filename):
+		_cav_prop_cache[filename] = load("res://art/caverne/" + filename)
+	return _cav_prop_cache[filename]
 
 # --- Outils ------------------------------------------------------------------
 # Hash déterministe 0..1 à partir de (x, y) et d'une graine (canal de bruit).

@@ -55,6 +55,17 @@ const ROOM_PROP := {
 	Foyer.ROOM_DEFENSE: ["prop_coffret_electrique_01.png", "mur"],
 }
 
+# --- Décor de CAVERNE (lot designer) -----------------------------------------
+const BG_ROCHE_PANEL := 256.0   # tuile de paroi roche (256 px), 3 variantes dispersées
+# Props de caverne semés dans les zones creusées (échelle + densité à régler au visuel).
+const CAV_PROP_SCALE := 1.0 / 5.0
+const CAV_PROP_SEED := 71
+const CAV_HANG := ["prop_stalactite_01.png", "prop_stalactite_02.png", "prop_racines_01.png"]
+const CAV_FLOOR := ["prop_gravats_01.png", "prop_veine_minerale_01.png", "prop_veine_minerale_02.png",
+	"prop_champignon_01.png", "prop_mousse_01.png", "prop_mousse_02.png",
+	"prop_cristal_01.png", "prop_cristal_02.png", "prop_cristal_03.png",
+	"prop_fissure_01.png", "prop_tuyau_01.png", "prop_tuyau_02.png", "prop_tuyau_03.png"]
+
 # Mur du Foyer : remplit r en panneaux 128 px, une VARIANTE par panneau (ancré monde).
 func _bg_base_blit(r: Rect2) -> void:
 	if r.size.x <= 0.0 or r.size.y <= 0.0:
@@ -100,6 +111,63 @@ func _draw_room_prop(mp: Vector2i, dest: Rect2) -> void:
 	var r := Rect2(Vector2(roundf(px), roundf(py)), sz)
 	if dest.intersects(r):
 		draw_texture_rect(tex, r, false)
+
+# Paroi roche : remplit r en panneaux 256 px, une VARIANTE par panneau (ancré monde).
+func _bg_roche_blit(r: Rect2) -> void:
+	if r.size.x <= 0.0 or r.size.y <= 0.0:
+		return
+	var x := floorf(r.position.x / BG_ROCHE_PANEL) * BG_ROCHE_PANEL
+	while x < r.position.x + r.size.x:
+		var y := floorf(r.position.y / BG_ROCHE_PANEL) * BG_ROCHE_PANEL
+		while y < r.position.y + r.size.y:
+			var panel := Rect2(x, y, BG_ROCHE_PANEL, BG_ROCHE_PANEL)
+			var clip := r.intersection(panel)
+			if clip.size.x > 0.0 and clip.size.y > 0.0:
+				var tex := TileArt.bg_roche_at(int(x / BG_ROCHE_PANEL), int(y / BG_ROCHE_PANEL))
+				if tex != null:
+					draw_texture_rect_region(tex, clip, Rect2(clip.position - panel.position, clip.size))
+			y += BG_ROCHE_PANEL
+		x += BG_ROCHE_PANEL
+
+# Sème les props de caverne dans les cellules creusées (roche) : stalactites/racines
+# au plafond, gravats/cristaux/tuyaux au sol. Déterministe (hash de cellule) → stable.
+func _draw_caverne_props(dest: Rect2) -> void:
+	var ts := float(WorldGrid.TILE)
+	var cx0 := int(floor(dest.position.x / ts))
+	var cy0 := int(floor(dest.position.y / ts))
+	var cx1 := int(ceil((dest.position.x + dest.size.x) / ts))
+	var cy1 := int(ceil((dest.position.y + dest.size.y) / ts))
+	for cy in range(cy0, cy1):
+		if cy >= WorldGrid.TRANSIT_TOP and cy <= WorldGrid.TRANSIT_BOT:
+			continue   # la bande Transit a ses propres structures
+		for cx in range(cx0, cx1):
+			if world.tile(cx, cy) != WorldGrid.EMPTY:
+				continue
+			if foyer != null and foyer.inside(Vector2(cx * ts + ts * 0.5, cy * ts + ts * 0.5)):
+				continue
+			var h0 := _phash(cx, cy, CAV_PROP_SEED)
+			if world.is_solid(cx, cy - 1) and world.tile(cx, cy + 1) == WorldGrid.EMPTY and h0 < 0.05:
+				_blit_cav_prop(CAV_HANG, cx, cy, true)
+			elif world.is_solid(cx, cy + 1) and world.tile(cx, cy - 1) == WorldGrid.EMPTY and h0 >= 0.05 and h0 < 0.13:
+				_blit_cav_prop(CAV_FLOOR, cx, cy, false)
+
+func _blit_cav_prop(set: Array, cx: int, cy: int, hang: bool) -> void:
+	var pick: String = set[mini(int(_phash(cx, cy, CAV_PROP_SEED + 1) * set.size()), set.size() - 1)]
+	var tex: Texture2D = TileArt.caverne_prop(pick)
+	if tex == null:
+		return
+	var ts := float(WorldGrid.TILE)
+	var sz := tex.get_size() * CAV_PROP_SCALE
+	var px := cx * ts + ts * 0.5 - sz.x * 0.5
+	var py := cy * ts if hang else (cy + 1) * ts - sz.y   # accroché au plafond / posé au sol
+	draw_texture_rect(tex, Rect2(Vector2(roundf(px), roundf(py)), sz), false)
+
+# Hash déterministe 0..1 (même principe que TileArt._h) pour semer sans état.
+func _phash(x: int, y: int, s: int) -> float:
+	var n := ((x + 1) * 73856093) ^ ((y + 1) * 19349663) ^ ((s + 7) * 83492791)
+	n = absi(n)
+	n = (n * 1103515245 + 12345) & 0x7fffffff
+	return float((n >> 8) & 0xffff) / 65535.0
 
 func tick(_delta: float) -> void:
 	queue_redraw()
@@ -267,7 +335,7 @@ func _draw() -> void:
 	var dest := Rect2(bg_pos, bg_size)
 	draw_rect(dest, Color(0.10, 0.11, 0.13))   # base sombre commune (jamais de trou)
 	# Fond PAR ZONE (chacune à sa place, où que soit le héros) :
-	_bg_blit(TileArt.bg_roche(), dest)                                   # roche partout (défaut)
+	_bg_roche_blit(dest)                                                 # roche partout (3 variantes)
 	var tun := dest.intersection(Rect2(dest.position.x, WorldGrid.TRANSIT_TOP * ts,    # bande Transit
 		dest.size.x, (WorldGrid.TRANSIT_BOT - WorldGrid.TRANSIT_TOP + 1) * ts))
 	_bg_blit(TileArt.bg_tunnel_paroi(), tun)
@@ -279,6 +347,7 @@ func _draw() -> void:
 				Rect2(fr.position.x * ts, fr.position.y * ts, fr.size.x * ts, fr.size.y * ts)))
 		for mp in foyer.rooms:                                              # props focaux par-dessus le mur
 			_draw_room_prop(mp, dest)
+	_draw_caverne_props(dest)                                            # props semés dans la roche creusée
 	for tx in range(ptx - VIEW_RX, ptx + VIEW_RX):
 		var s := world.surface[clampi(tx, 0, WorldGrid.GRID_W - 1)]
 		if s > pty - VIEW_RY:
