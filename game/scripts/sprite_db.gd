@@ -24,10 +24,10 @@ const ROOT := {"hero": "hero"}
 # (l'index suit une PROGRESSION 0→1 fournie par l'appelant : attaque/touché/mort).
 const ANIM := {
 	"hero": {
-		"idle": [3, 4, true], "marche": [6, 10, true], "saut": [4, 7, true],
-		"echelle": [4, 10, true], "creuse": [4, 12, true],
-		"tir": [3, 12, false], "attaque": [4, 12, false],
-		"touche": [2, 12, false], "mort": [5, 8, false]},
+		"idle": [6, 8, true], "marche": [6, 10, true], "saut": [4, 7, true],
+		"echelle": [4, 10, true], "creuse": [6, 12, true],
+		"tir": [6, 18, false], "attaque": [6, 18, false],
+		"touche": [6, 14, false], "mort": [6, 8, false]},
 	"enemy_fonceur": {
 		"idle": [2, 4, true], "marche": [4, 10, true], "attaque": [3, 12, false],
 		"touche": [1, 1, false], "mort": [3, 8, false]},
