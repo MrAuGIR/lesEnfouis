@@ -25,7 +25,7 @@ const ROOT := {"hero": "hero"}
 const ANIM := {
 	"hero": {
 		"idle": [6, 8, true], "marche": [6, 10, true], "saut": [4, 7, true],
-		"echelle": [4, 10, true], "creuse": [6, 12, true],
+		"echelle": [6, 10, true], "creuse": [6, 12, true],
 		"tir": [6, 18, false], "attaque": [6, 18, false],
 		"touche": [6, 14, false], "mort": [6, 8, false]},
 	"enemy_fonceur": {
