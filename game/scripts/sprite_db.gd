@@ -10,6 +10,7 @@ extends RefCounted
 # Pivot (px depuis le coin haut-gauche de la frame) par entité : x = milieu, y = pieds.
 const PIVOT := {
 	"hero": Vector2(16, 30),
+	"marchant": Vector2(16, 30),
 	"enemy_fonceur": Vector2(16, 30),
 	"enemy_tireur": Vector2(16, 30),
 	"enemy_lourd": Vector2(24, 46),
@@ -18,7 +19,7 @@ const PIVOT := {
 
 # Sous-dossier de res://art/ par entité (défaut : "enemies"). Le héros a sa propre
 # livraison (hero_sprites_production), rangée à part des pilleurs/boss.
-const ROOT := {"hero": "hero"}
+const ROOT := {"hero": "hero", "marchant": "marchant"}
 
 # entité -> { anim -> [nb_frames, fps, loop] }. loop=false → animation one-shot
 # (l'index suit une PROGRESSION 0→1 fournie par l'appelant : attaque/touché/mort).
@@ -28,6 +29,8 @@ const ANIM := {
 		"echelle": [6, 10, true], "creuse": [6, 12, true],
 		"tir": [6, 18, false], "attaque": [6, 18, false],
 		"touche": [6, 14, false], "mort": [6, 8, false]},
+	"marchant": {
+		"idle": [6, 4, true]},
 	"enemy_fonceur": {
 		"idle": [2, 4, true], "marche": [4, 10, true], "attaque": [3, 12, false],
 		"touche": [1, 1, false], "mort": [3, 8, false]},

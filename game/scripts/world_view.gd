@@ -441,10 +441,15 @@ func _draw() -> void:
 		var cp: Vector2 = c["pos"]
 		draw_rect(Rect2(cp - Population.NPC_HALF, Population.NPC_HALF * 2.0), Color(0.95, 0.82, 0.40))
 		draw_rect(Rect2(cp - Population.NPC_HALF, Population.NPC_HALF * 2.0), Color(0.4, 0.3, 0.05, 0.8), false, 1.0)
-	# La caravane (le marchand)
+	# La caravane (le marchand) — regard vers la gauche (vers le hall / le héros qui approche)
 	if caravan.present:
-		draw_rect(Rect2(caravan.pos - Vector2(7, 11), Vector2(14, 22)), Color(0.85, 0.65, 0.30))
-		draw_rect(Rect2(caravan.pos - Vector2(7, 11), Vector2(14, 22)), Color(0.3, 0.2, 0.08, 0.8), false, 1.0)
+		var mfeet := caravan.pos + Vector2(0.0, 11.0)
+		var mtex: Texture2D = SpriteDB.frame("marchant", "idle", _clock(), 0.0)
+		if mtex != null:
+			_blit_sprite(mtex, "marchant", mfeet, -1.0, false)
+		else:
+			draw_rect(Rect2(caravan.pos - Vector2(7, 11), Vector2(14, 22)), Color(0.85, 0.65, 0.30))
+			draw_rect(Rect2(caravan.pos - Vector2(7, 11), Vector2(14, 22)), Color(0.3, 0.2, 0.08, 0.8), false, 1.0)
 	# Le héros (porteur de la lumière) — regard = direction de la lampe (visée souris)
 	var hinfo := _hero_anim()
 	var hdir := -1.0 if hero.aim.x < 0.0 else 1.0
