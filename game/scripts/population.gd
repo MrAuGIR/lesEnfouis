@@ -31,6 +31,9 @@ var captives := []   # légendaires à libérer : {"name", "travail", "garde", "
 var incoming := []   # légendaires libérés, en route : {"npc": Dictionary, "t": float}
 var arrival_timer := 0.0
 
+# Variantes de sprite des survivants (mineurs) — réparties au hasard à l'arrivée.
+const MINER_VARIANTS := ["miner_01", "miner_02"]
+
 func _init(w: WorldGrid, f: Foyer) -> void:
 	world = w
 	foyer = f
@@ -142,6 +145,7 @@ func _arrive() -> String:
 		"pos": Vector2(foyer.pos.x, (o.y + WorldGrid.MOD_H - 1) * WorldGrid.TILE - NPC_HALF.y),
 		"dir": (1.0 if randf() < 0.5 else -1.0),
 		"pause": 1.5,
+		"variant": MINER_VARIANTS[randi() % MINER_VARIANTS.size()],
 		"hp": NPC_HP, "down": false, "heal_t": 0.0, "heal_cell": null, "def_cd": 0.0,
 	}
 	npcs.append(npc)
@@ -172,6 +176,7 @@ func free_captive(i: int) -> String:
 		"cell": null,
 		"pos": Vector2(foyer.pos.x, (o.y + WorldGrid.MOD_H - 1) * WorldGrid.TILE - NPC_HALF.y),
 		"dir": 1.0, "pause": 1.5,
+		"variant": MINER_VARIANTS[randi() % MINER_VARIANTS.size()],
 		"hp": NPC_HP, "down": false, "heal_t": 0.0, "heal_cell": null, "def_cd": 0.0,
 	}})
 	return "%s est libre ! Il/elle rejoint le Foyer par ses propres moyens. (Travail %d / Garde %d)" % \

@@ -1,6 +1,7 @@
 class_name SpriteDB
 extends RefCounted
-## Banque de sprites animés des PILLEURS et du ROI DES GALERIES (lot designer v3).
+## Banque de sprites animés : alliés (héros, marchand, mineurs du Foyer) + PILLEURS
+## et ROI DES GALERIES. Les mineurs ont deux variantes (miner_01 bleu, miner_02 brun).
 ## Charge les frames PNG individuelles à la demande, les met en cache, et rend la
 ## frame courante d'une animation. Le rendu (world_view) ancre au PIVOT (pieds)
 ## et flippe selon la direction (les sprites regardent à DROITE). Pas de masque
@@ -11,6 +12,8 @@ extends RefCounted
 const PIVOT := {
 	"hero": Vector2(16, 30),
 	"marchant": Vector2(16, 30),
+	"miner_01": Vector2(16, 30),
+	"miner_02": Vector2(16, 30),
 	"enemy_fonceur": Vector2(16, 30),
 	"enemy_tireur": Vector2(16, 30),
 	"enemy_lourd": Vector2(24, 46),
@@ -19,7 +22,8 @@ const PIVOT := {
 
 # Sous-dossier de res://art/ par entité (défaut : "enemies"). Le héros a sa propre
 # livraison (hero_sprites_production), rangée à part des pilleurs/boss.
-const ROOT := {"hero": "hero", "marchant": "marchant"}
+const ROOT := {"hero": "hero", "marchant": "marchant",
+	"miner_01": "miner_01", "miner_02": "miner_02"}
 
 # entité -> { anim -> [nb_frames, fps, loop] }. loop=false → animation one-shot
 # (l'index suit une PROGRESSION 0→1 fournie par l'appelant : attaque/touché/mort).
@@ -31,6 +35,10 @@ const ANIM := {
 		"touche": [6, 14, false], "mort": [6, 8, false]},
 	"marchant": {
 		"idle": [6, 4, true]},
+	"miner_01": {
+		"idle": [6, 8, true], "marche": [6, 10, true]},
+	"miner_02": {
+		"idle": [6, 8, true], "marche": [6, 10, true]},
 	"enemy_fonceur": {
 		"idle": [2, 4, true], "marche": [4, 10, true], "attaque": [3, 12, false],
 		"touche": [1, 1, false], "mort": [3, 8, false]},

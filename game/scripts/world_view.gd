@@ -434,8 +434,17 @@ func _draw() -> void:
 			draw_rect(lying, Color(0.55, 0.55, 0.62))
 			draw_rect(lying, Color(0.6, 0.15, 0.15, 0.8), false, 1.0)
 			continue
-		draw_rect(Rect2(np - Population.NPC_HALF, Population.NPC_HALF * 2.0), Color(0.62, 0.78, 0.92))
-		draw_rect(Rect2(np - Population.NPC_HALF, Population.NPC_HALF * 2.0), Color(0, 0, 0, 0.5), false, 1.0)
+		# Mineur debout : sprite animé (marche quand il se déplace, idle en pause),
+		# regard = direction de marche. Repli grey-box si le sprite manque.
+		var variant := String(npc.get("variant", "miner_01"))
+		var moving := float(npc.get("pause", 0.0)) <= 0.0
+		var nanim := "marche" if (moving and SpriteDB.has(variant, "marche")) else "idle"
+		var ntex: Texture2D = SpriteDB.frame(variant, nanim, _clock(), 0.0)
+		if ntex != null:
+			_blit_sprite(ntex, variant, np + Vector2(0.0, Population.NPC_HALF.y), float(npc.get("dir", 1.0)), false)
+		else:
+			draw_rect(Rect2(np - Population.NPC_HALF, Population.NPC_HALF * 2.0), Color(0.62, 0.78, 0.92))
+			draw_rect(Rect2(np - Population.NPC_HALF, Population.NPC_HALF * 2.0), Color(0, 0, 0, 0.5), false, 1.0)
 	# Légendaires captifs (dorés — leur lueur vient de lights.gd)
 	for c in pop.captives:
 		var cp: Vector2 = c["pos"]
